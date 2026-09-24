@@ -41,7 +41,7 @@ export default function SettingsScreen() {
       </Pressable>
 
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Permissions & access</Text>
-      <View style={[styles.settingGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.settingGroup, { backgroundColor: colors.card, borderColor: colors.border, transform: [{ perspective: 800 }, { rotateX: '3deg' }], shadowColor: '#000000', shadowOpacity: 0.28, shadowRadius: 15, shadowOffset: { width: 0, height: 10 }, elevation: 7 }]}>
         <SettingRow icon="map-pin" title="Location check-ins" description="Optional moments saved with your location" value={settings.locationCheckIns} onChange={(value) => updateSetting('locationCheckIns', value)} colors={colors} />
         <Divider colors={colors} />
         <SettingRow icon="mail" title="Email check-ins" description="Send a check-in only when you ask" value={settings.emailCheckIns} onChange={(value) => updateSetting('emailCheckIns', value)} colors={colors} />
@@ -57,7 +57,7 @@ export default function SettingsScreen() {
       </View>
 
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Your companion</Text>
-      <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border, transform: [{ perspective: 800 }, { rotateY: '-3deg' }], shadowColor: '#000000', shadowOpacity: 0.28, shadowRadius: 15, shadowOffset: { width: 0, height: 10 }, elevation: 7 }]}>
         <View style={[styles.profileAvatar, { backgroundColor: colors.primary }]}>
           <Feather name="heart" size={21} color={colors.primaryForeground} />
         </View>
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 25, fontFamily: 'Inter_700Bold', letterSpacing: -0.7 },
   subtitle: { fontSize: 14, lineHeight: 20, fontFamily: 'Inter_400Regular', marginHorizontal: 22, marginTop: 9, maxWidth: 340 },
   settingsIcon: { width: 42, height: 42, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  modeCard: { marginHorizontal: 22, marginTop: 22, borderRadius: 24, padding: 17, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  modeCard: { marginHorizontal: 22, marginTop: 22, borderRadius: 24, padding: 17, flexDirection: 'row', alignItems: 'center', gap: 12, transform: [{ perspective: 800 }, { rotateX: '5deg' }, { rotateY: '2deg' }], shadowColor: '#000000', shadowOpacity: 0.38, shadowRadius: 17, shadowOffset: { width: 0, height: 12 }, elevation: 9 },
   modeCardIcon: { width: 42, height: 42, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   modeCopy: { flex: 1 },
   modeLabel: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 1.3, marginBottom: 4 },

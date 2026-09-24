@@ -44,7 +44,7 @@ export default function ChatScreen() {
         </Pressable>
       </View>
       {showRoleplay && (
-        <View style={[styles.roleplayPanel, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+          <View style={[styles.roleplayPanel, { backgroundColor: colors.card, borderBottomColor: colors.border, shadowColor: '#000000', shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 9 }, elevation: 7 }]}>
           <View style={styles.roleplayHeading}>
             <View>
               <Text style={[styles.roleplayTitle, { color: colors.foreground }]}>Choose a role-play</Text>
@@ -104,7 +104,7 @@ export default function ChatScreen() {
                 <Feather name="heart" size={12} color={colors.primary} />
               </View>
             )}
-            <View style={[styles.bubble, message.sender === 'user' ? { backgroundColor: colors.primary } : { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+            <View style={[styles.bubble, message.sender === 'user' ? { backgroundColor: colors.primary, transform: [{ perspective: 600 }, { rotateY: '-2deg' }] } : { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, transform: [{ perspective: 600 }, { rotateY: '2deg' }], shadowColor: '#000000', shadowOpacity: 0.22, shadowRadius: 8, shadowOffset: { width: 0, height: 6 }, elevation: 4 }]}>
               <Text style={[styles.messageText, { color: message.sender === 'user' ? colors.primaryForeground : colors.foreground }]}>{message.text}</Text>
               <Text style={[styles.timeText, { color: message.sender === 'user' ? colors.coralSoft : colors.mutedForeground }]}>{message.time}</Text>
             </View>
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 15, paddingHorizontal: 11, paddingVertical: 9 },
   chipText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   composerWrap: { borderTopWidth: 1, paddingHorizontal: 15, paddingTop: 11 },
-  composer: { minHeight: 49, borderWidth: 1, borderRadius: 19, flexDirection: 'row', alignItems: 'flex-end', padding: 6, gap: 6 },
+  composer: { minHeight: 49, borderWidth: 1, borderRadius: 19, flexDirection: 'row', alignItems: 'flex-end', padding: 6, gap: 6, shadowColor: '#000000', shadowOpacity: 0.28, shadowRadius: 13, shadowOffset: { width: 0, height: 7 }, elevation: 5 },
   input: { flex: 1, fontSize: 14, fontFamily: 'Inter_400Regular', maxHeight: 90, paddingHorizontal: 9, paddingVertical: 7 },
   micButton: { width: 35, height: 35, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   sendButton: { width: 35, height: 35, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },

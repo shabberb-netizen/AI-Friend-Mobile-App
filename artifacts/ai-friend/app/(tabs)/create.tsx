@@ -77,7 +77,7 @@ export default function CreateScreen() {
           <Pressable
             key={action.label}
             onPress={() => setSelectedAction(action.label)}
-            style={({ pressed }) => [styles.action, { backgroundColor: selectedAction === action.label ? colors.accent : colors.card, borderColor: selectedAction === action.label ? colors.violet : colors.border, opacity: pressed ? 0.78 : 1 }]}
+            style={({ pressed }) => [styles.action, { backgroundColor: selectedAction === action.label ? colors.accent : colors.card, borderColor: selectedAction === action.label ? colors.violet : colors.border, opacity: pressed ? 0.78 : 1, transform: [{ perspective: 650 }, { rotateX: '8deg' }, { rotateY: action.label === 'Edit background' || action.label === 'Design clothing' ? '-4deg' : '4deg' }] }]}
           >
             <Feather name={action.icon} size={17} color={selectedAction === action.label ? colors.accentForeground : colors.indigoSoft} />
             <Text style={[styles.actionText, { color: selectedAction === action.label ? colors.accentForeground : colors.foreground }]}>{action.label}</Text>
@@ -104,7 +104,7 @@ export default function CreateScreen() {
 
 function GalleryCard({ source, label, colors }: { source: number; label: string; colors: ReturnType<typeof useColors> }) {
   return (
-    <View style={[styles.galleryCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+    <View style={[styles.galleryCard, { borderColor: colors.border, backgroundColor: colors.card, transform: [{ perspective: 700 }, { rotateX: '6deg' }, { rotateY: label === 'Blue hour' ? '-4deg' : '4deg' }], shadowColor: '#000000', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 6 }]}>
       <Image source={source} style={styles.galleryImage} contentFit="cover" transition={250} />
       <View style={styles.galleryCaption}>
         <Text style={[styles.galleryLabel, { color: colors.foreground }]}>{label}</Text>
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   typePicker: { marginHorizontal: 22, marginTop: 22, borderRadius: 16, padding: 4, flexDirection: 'row' },
   typeButton: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 13 },
   typeText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  promptCard: { marginHorizontal: 22, marginTop: 14, borderRadius: 22, borderWidth: 1, padding: 16 },
+  promptCard: { marginHorizontal: 22, marginTop: 14, borderRadius: 22, borderWidth: 1, padding: 16, shadowColor: '#000000', shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
   fieldLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1.2, marginBottom: 10 },
   promptInput: { minHeight: 80, fontSize: 15, lineHeight: 22, fontFamily: 'Inter_400Regular', textAlignVertical: 'top' },
   promptFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   inspireText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   sectionTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.3, marginHorizontal: 22, marginTop: 25, marginBottom: 12 },
   actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, paddingHorizontal: 22 },
-  action: { width: '48%', minHeight: 52, borderWidth: 1, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 12 },
+  action: { width: '48%', minHeight: 52, borderWidth: 1, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 12, shadowColor: '#000000', shadowOpacity: 0.22, shadowRadius: 9, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
   actionText: { fontSize: 11, fontFamily: 'Inter_600SemiBold', flex: 1 },
   createButton: { marginHorizontal: 22, marginTop: 17, paddingVertical: 15, borderRadius: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   createButtonText: { fontSize: 13, fontFamily: 'Inter_700Bold', flex: 1 },

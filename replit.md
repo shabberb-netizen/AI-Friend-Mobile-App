@@ -1,6 +1,6 @@
 # AI Friend
 
-AI Friend is a privacy-first Expo mobile companion for local-first chat, study help, creative media prompts, and permission-controlled device features.
+AI Friend is a privacy-first Expo mobile companion with a spatial 3D-inspired interface for local-first chat, study help, creative media prompts, and permission-controlled device features.
 
 ## Run & Operate
 
@@ -34,6 +34,7 @@ AI Friend is a privacy-first Expo mobile companion for local-first chat, study h
 - Online/offline mode is explicit and visible; future cloud AI must not silently receive private content.
 - Location, email, voice, earbuds, calls, and social connections are opt-in capabilities controlled by the device OS and supported APIs.
 - Expo Router tabs keep the main companion flows one tap away while leaving deeper integrations modular.
+- The visual system uses dark depth layers, perspective transforms, raised surfaces, and an animated companion orb instead of flat white screens.
 
 ## Product
 
