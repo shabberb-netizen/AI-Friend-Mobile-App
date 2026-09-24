@@ -1,12 +1,15 @@
 import { Feather } from '@expo/vector-icons';
 import { useAuth, useUser } from '@clerk/expo';
 import { router } from 'expo-router';
-import React from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppSettings, useApp } from '@/context/AppContext';
 import { ScreenMode, useThemeMode } from '@/context/ThemeContext';
 import { useColors } from '@/hooks/useColors';
+import * as Location from 'expo-location';
+import { requestRecordingPermissionsAsync } from 'expo-audio';
+import React, { useEffect, useState } from 'react';
+import { Alert, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import type { PermissionResponse } from 'expo';
 
 export default function SettingsScreen() {
   const colors = useColors();
@@ -16,6 +19,128 @@ export default function SettingsScreen() {
   const { isSignedIn } = useAuth();
   const { user } = useUser();
   const isOffline = settings.mode === 'offline';
+  const [locationPermission, requestLocationPermission] = Location.useForegroundPermissions();
+  const [refreshedLocationPermission, setRefreshedLocationPermission] = useState<PermissionResponse | null>(null);
+  const [lastCheckIn, setLastCheckIn] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const effectiveLocationPermission = refreshedLocationPermission ?? locationPermission;
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return undefined;
+
+    let mounted = true;
+    const refreshPermission = async () => {
+      try {
+        const permission = await Location.getForegroundPermissionsAsync();
+        if (mounted) setRefreshedLocationPermission(permission);
+      } catch {
+        if (mounted) setLocationError('Location permission status is unavailable on this device.');
+      }
+    };
+
+    void refreshPermission();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refreshPermission();
+    });
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  const openDeviceSettings = () => {
+    if (Platform.OS === 'web') return;
+    void Linking.openSettings().catch(() => {
+      Alert.alert('Settings unavailable', 'Open your device settings and allow access for AI Friend there.');
+    });
+  };
+
+  const handleLocationToggle = async (enabled: boolean) => {
+    setLocationError(null);
+    if (!enabled) {
+      updateSetting('locationCheckIns', false);
+      return;
+    }
+    if (Platform.OS === 'web') {
+      Alert.alert('Location check-ins need a mobile device', 'Native location permission is available on iOS and Android. This web preview will not turn location check-ins on.');
+      return;
+    }
+
+    const permission = await requestLocationPermission();
+    setRefreshedLocationPermission(permission);
+    if (!permission.granted) {
+      updateSetting('locationCheckIns', false);
+      setLocationError(permission.canAskAgain ? 'Location access was not granted. Check-ins remain off.' : 'Location access is blocked. Open device settings to turn it back on.');
+      if (!permission.canAskAgain) {
+        Alert.alert('Location access blocked', 'AI Friend cannot turn this permission back on. Open device settings to allow location while using the app.', [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open Settings', onPress: openDeviceSettings },
+        ]);
+      }
+      return;
+    }
+    updateSetting('locationCheckIns', true);
+  };
+
+  const makeLocationCheckIn = async () => {
+    setLocationError(null);
+    if (Platform.OS === 'web') return;
+    let permission = effectiveLocationPermission;
+    if (!permission?.granted) {
+      permission = await requestLocationPermission();
+      setRefreshedLocationPermission(permission);
+    }
+    if (!permission.granted) {
+      setLocationError(permission.canAskAgain ? 'Location access was denied. Check-ins are paused.' : 'Location access was revoked. Open device settings to allow it again.');
+      return;
+    }
+    try {
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const timestamp = new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit' }).format(new Date());
+      setLastCheckIn(`Checked in at ${timestamp} · ${position.coords.latitude.toFixed(3)}, ${position.coords.longitude.toFixed(3)}`);
+    } catch {
+      setLocationError('We could not read your location. Check that device location services are on and try again.');
+    }
+  };
+
+  const handleEmailToggle = (enabled: boolean) => {
+    if (!enabled) {
+      updateSetting('emailCheckIns', false);
+      return;
+    }
+    Alert.alert(
+      'Email check-ins are opt-in',
+      'Nothing is sent automatically. When you explicitly use a supported send action, the email contains the check-in time and the note you choose. Location is included only when you also choose a location check-in.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Opt in', onPress: () => updateSetting('emailCheckIns', true) },
+      ],
+    );
+  };
+
+  const handleVoiceToggle = async (enabled: boolean) => {
+    if (!enabled) {
+      updateSetting('voiceCommands', false);
+      return;
+    }
+    const permission = await requestRecordingPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        'Microphone access is off',
+        permission.canAskAgain
+          ? 'Voice commands stay off until you allow microphone access.'
+          : 'Microphone access is blocked for AI Friend. Open device settings to turn it back on.',
+        permission.canAskAgain
+          ? [{ text: 'Not now', style: 'cancel' }]
+          : [
+              { text: 'Not now', style: 'cancel' },
+              { text: 'Open Settings', onPress: openDeviceSettings },
+            ],
+      );
+      return;
+    }
+    updateSetting('voiceCommands', true);
+  };
 
   return (
     <ScrollView
@@ -77,18 +202,56 @@ export default function SettingsScreen() {
 
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Permissions & access</Text>
       <View style={[styles.settingGroup, { backgroundColor: colors.card, borderColor: colors.border, transform: [{ perspective: 800 }, { rotateX: '3deg' }], shadowColor: '#000000', shadowOpacity: 0.28, shadowRadius: 15, shadowOffset: { width: 0, height: 10 }, elevation: 7 }]}>
-        <SettingRow icon="map-pin" title="Location check-ins" description="Optional moments saved with your location" value={settings.locationCheckIns} onChange={(value) => updateSetting('locationCheckIns', value)} colors={colors} />
+        <SettingRow icon="map-pin" title="Location check-ins" description="Ask for foreground location only when you opt in" value={settings.locationCheckIns} onChange={handleLocationToggle} colors={colors} />
         <Divider colors={colors} />
-        <SettingRow icon="mail" title="Email check-ins" description="Send a check-in only when you ask" value={settings.emailCheckIns} onChange={(value) => updateSetting('emailCheckIns', value)} colors={colors} />
+        <SettingRow icon="mail" title="Email check-ins" description="Opt in before a requested email can be sent" value={settings.emailCheckIns} onChange={handleEmailToggle} colors={colors} />
         <Divider colors={colors} />
-        <SettingRow icon="mic" title="Voice commands" description="Use your microphone for hands-free chat" value={settings.voiceCommands} onChange={(value) => updateSetting('voiceCommands', value)} colors={colors} />
+        <SettingRow icon="mic" title="Voice commands" description="Ask for microphone access when you start listening" value={settings.voiceCommands} onChange={handleVoiceToggle} colors={colors} />
         <Divider colors={colors} />
-        <SettingRow icon="headphones" title="Earbud controls" description="Start and pause listening from your earbuds" value={settings.headphoneControls} onChange={(value) => updateSetting('headphoneControls', value)} colors={colors} />
+        <SettingRow icon="headphones" title="Earbud controls" description="Use supported start and pause speech actions" value={settings.headphoneControls} onChange={(value) => updateSetting('headphoneControls', value)} colors={colors} />
       </View>
+
+      {settings.locationCheckIns && (
+        <View style={[styles.featureCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.featureIcon, { backgroundColor: colors.mint }]}>
+            <Feather name={effectiveLocationPermission?.granted ? 'navigation' : 'slash'} size={16} color={colors.mintText} />
+          </View>
+          <View style={styles.featureCopy}>
+            <Text style={[styles.featureTitle, { color: colors.foreground }]}>
+              {effectiveLocationPermission?.granted ? 'Location access is ready' : effectiveLocationPermission?.status === 'denied' ? 'Location access is denied or revoked' : 'Checking location access…'}
+            </Text>
+            <Text style={[styles.featureBody, { color: colors.mutedForeground }]}>
+              {effectiveLocationPermission?.granted
+                ? 'A check-in reads your current position only after you tap the button below.'
+                : 'Check-ins are paused until you allow location while AI Friend is in use.'}
+            </Text>
+            {effectiveLocationPermission?.granted ? (
+              <Pressable testID="location-check-in" onPress={() => void makeLocationCheckIn()} style={({ pressed }) => [styles.featureAction, { backgroundColor: colors.secondary, opacity: pressed ? 0.75 : 1 }]}>
+                <Feather name="map-pin" size={14} color={colors.secondaryForeground} />
+                <Text style={[styles.featureActionText, { color: colors.secondaryForeground }]}>Check in now</Text>
+              </Pressable>
+            ) : effectiveLocationPermission?.status === 'denied' && !effectiveLocationPermission.canAskAgain ? (
+              <Pressable testID="open-location-settings" onPress={openDeviceSettings} style={({ pressed }) => [styles.featureAction, { backgroundColor: colors.secondary, opacity: pressed ? 0.75 : 1 }]}>
+                <Feather name="settings" size={14} color={colors.secondaryForeground} />
+                <Text style={[styles.featureActionText, { color: colors.secondaryForeground }]}>Open device settings</Text>
+              </Pressable>
+            ) : null}
+            {lastCheckIn && <Text style={[styles.featureMeta, { color: colors.mintText }]}>{lastCheckIn}</Text>}
+            {locationError && <Text style={[styles.featureMeta, { color: colors.destructive }]}>{locationError}</Text>}
+          </View>
+        </View>
+      )}
+
+      {settings.emailCheckIns && (
+        <View style={[styles.disclosureCard, { backgroundColor: colors.secondary }]}>
+          <Feather name="mail" size={15} color={colors.secondaryForeground} />
+          <Text style={[styles.disclosureText, { color: colors.secondaryForeground }]}>Email stays off by default. AI Friend sends nothing in the background; a future send action must be requested by you and includes only the check-in time and your chosen note.</Text>
+        </View>
+      )}
 
       <View style={[styles.notice, { backgroundColor: colors.secondary }]}>
         <Feather name="info" size={16} color={colors.secondaryForeground} />
-        <Text style={[styles.noticeText, { color: colors.secondaryForeground }]}>Phone calls, messaging apps, tracking, and microphone access always require device permission. AI Friend cannot bypass your operating system.</Text>
+        <Text style={[styles.noticeText, { color: colors.secondaryForeground }]}>Calls and messages stay inside OS-supported dial or compose screens. AI Friend never auto-answers calls, silently sends messages, or tracks you in the background.</Text>
       </View>
 
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Your companion</Text>
@@ -173,6 +336,16 @@ const styles = StyleSheet.create({
   settingTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', marginBottom: 3 },
   settingDescription: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_400Regular' },
   divider: { height: 1, marginLeft: 45 },
+  featureCard: { marginHorizontal: 22, marginTop: 12, borderWidth: 1, borderRadius: 19, padding: 13, flexDirection: 'row', gap: 10 },
+  featureIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  featureCopy: { flex: 1 },
+  featureTitle: { fontSize: 12, fontFamily: 'Inter_700Bold', marginBottom: 4 },
+  featureBody: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_400Regular' },
+  featureAction: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 13, paddingHorizontal: 10, paddingVertical: 8, marginTop: 10 },
+  featureActionText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
+  featureMeta: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_500Medium', marginTop: 8 },
+  disclosureCard: { marginHorizontal: 22, marginTop: 12, borderRadius: 17, padding: 12, flexDirection: 'row', gap: 9, alignItems: 'flex-start' },
+  disclosureText: { flex: 1, fontSize: 10, lineHeight: 15, fontFamily: 'Inter_500Medium' },
   notice: { marginHorizontal: 22, marginTop: 14, borderRadius: 17, padding: 13, flexDirection: 'row', gap: 9, alignItems: 'flex-start' },
   noticeText: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_500Medium', flex: 1 },
   profileCard: { marginHorizontal: 22, borderWidth: 1, borderRadius: 22, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 11 },

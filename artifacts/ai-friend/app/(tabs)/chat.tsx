@@ -1,25 +1,168 @@
 import { Feather } from '@expo/vector-icons';
+import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
+import * as Speech from 'expo-speech';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { useColors } from '@/hooks/useColors';
 
+type BrowserSpeechResult = { [index: number]: { transcript: string } };
+type BrowserSpeechEvent = Event & { results: { [index: number]: BrowserSpeechResult } };
+type BrowserSpeechRecognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onend: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onresult: ((event: BrowserSpeechEvent) => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+
 export default function ChatScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { messages, settings, roleplayMode, setRoleplayMode, sendMessage, isChatting, chatError } = useApp();
+  const recorder = useAudioRecorder(RecordingPresets.LOW_QUALITY);
   const [draft, setDraft] = useState<string>('');
   const [showRoleplay, setShowRoleplay] = useState<boolean>(false);
+  const [isListening, setIsListening] = useState<boolean>(false);
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const isOffline = settings.mode === 'offline';
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speakNextReplyRef = useRef<boolean>(false);
+  const latestFriendMessage = [...messages].reverse().find((message) => message.sender === 'friend');
 
   const submit = () => {
     if (!draft.trim()) return;
     void sendMessage(draft);
     setDraft('');
   };
+
+  const speakMessage = (text: string) => {
+    setVoiceError(null);
+    setIsSpeaking(true);
+    Speech.stop().catch(() => undefined);
+    Speech.speak(text, {
+      rate: 0.98,
+      onDone: () => setIsSpeaking(false),
+      onStopped: () => setIsSpeaking(false),
+      onError: () => {
+        setIsSpeaking(false);
+        setVoiceError('Speech output is not available on this device.');
+      },
+    });
+  };
+
+  const toggleSpeech = () => {
+    if (!latestFriendMessage) return;
+    if (isSpeaking) {
+      Speech.stop().catch(() => undefined);
+      setIsSpeaking(false);
+      return;
+    }
+    speakMessage(latestFriendMessage.text);
+  };
+
+  const startVoiceCommand = async () => {
+    setVoiceError(null);
+    if (!settings.voiceCommands) {
+      setVoiceError('Turn on Voice commands in Settings first. AI Friend will ask for microphone access there.');
+      return;
+    }
+    if (isListening) {
+      recognitionRef.current?.stop();
+      if (recordingTimerRef.current) clearTimeout(recordingTimerRef.current);
+      if (recorder.isRecording) await recorder.stop().catch(() => undefined);
+      setIsListening(false);
+      return;
+    }
+
+    const permission = await requestRecordingPermissionsAsync();
+    if (!permission.granted) {
+      setVoiceError(permission.canAskAgain ? 'Microphone access was denied. Voice commands remain off.' : 'Microphone access is blocked. Open device settings to allow it again.');
+      if (!permission.canAskAgain) {
+        Alert.alert('Microphone access blocked', 'Open device settings to allow microphone access for AI Friend.', [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => void Linking.openSettings() },
+        ]);
+      }
+      return;
+    }
+
+    if (Platform.OS === 'web') {
+      const browserWindow = globalThis as typeof globalThis & { SpeechRecognition?: BrowserSpeechRecognitionConstructor; webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor };
+      const Recognition = browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition;
+      if (!Recognition) {
+        setVoiceError('This browser granted microphone access, but speech-to-text is not available here. Type your command instead.');
+        return;
+      }
+      const recognition = new Recognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+      recognition.onresult = (event) => {
+        const transcript = event.results[0]?.[0]?.transcript?.trim();
+        setIsListening(false);
+        recognitionRef.current = null;
+        if (!transcript) {
+          setVoiceError('I did not hear a command. Try again or type it instead.');
+          return;
+        }
+        setDraft(transcript);
+        speakNextReplyRef.current = true;
+        void sendMessage(transcript);
+      };
+      recognition.onerror = () => {
+        setIsListening(false);
+        recognitionRef.current = null;
+        setVoiceError('Speech input stopped before a command was captured. Try again or type it instead.');
+      };
+      recognition.onend = () => {
+        setIsListening(false);
+        recognitionRef.current = null;
+      };
+      recognitionRef.current = recognition;
+      setIsListening(true);
+      recognition.start();
+      return;
+    }
+
+    try {
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record({ forDuration: 5 });
+      setIsListening(true);
+      recordingTimerRef.current = setTimeout(async () => {
+        await recorder.stop().catch(() => undefined);
+        setIsListening(false);
+        setVoiceError('Microphone capture finished. Speech-to-text is not available in this Expo build yet, so use the text field for the command.');
+      }, 5000);
+    } catch {
+      setIsListening(false);
+      setVoiceError('Microphone capture could not start on this device.');
+    }
+  };
+
+  useEffect(() => {
+    if (!speakNextReplyRef.current || isChatting) return;
+    const reply = [...messages].reverse().find((message) => message.sender === 'friend');
+    if (!reply) return;
+    speakNextReplyRef.current = false;
+    speakMessage(reply.text);
+  }, [isChatting, messages]);
+
+  useEffect(() => () => {
+    recognitionRef.current?.stop();
+    if (recordingTimerRef.current) clearTimeout(recordingTimerRef.current);
+    Speech.stop().catch(() => undefined);
+  }, []);
 
   return (
     <KeyboardAvoidingView behavior="padding" style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -87,6 +230,12 @@ export default function ChatScreen() {
             <Text style={[styles.noticeText, { color: colors.secondaryForeground }]}>{chatError}</Text>
           </View>
         )}
+        {voiceError && (
+          <View style={[styles.notice, { backgroundColor: colors.coralSoft }]}>
+            <Feather name="mic-off" size={15} color={colors.primary} />
+            <Text style={[styles.noticeText, { color: colors.foreground }]}>{voiceError}</Text>
+          </View>
+        )}
         {messages.map((message) => (
           <View key={message.id} style={[styles.messageRow, message.sender === 'user' ? styles.userRow : styles.friendRow]}>
             {message.sender === 'friend' && (
@@ -96,6 +245,12 @@ export default function ChatScreen() {
             )}
             <View style={[styles.bubble, message.sender === 'user' ? { backgroundColor: colors.primary, transform: [{ perspective: 600 }, { rotateY: '-2deg' }] } : { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, transform: [{ perspective: 600 }, { rotateY: '2deg' }], shadowColor: '#000000', shadowOpacity: 0.22, shadowRadius: 8, shadowOffset: { width: 0, height: 6 }, elevation: 4 }]}>
               <Text style={[styles.messageText, { color: message.sender === 'user' ? colors.primaryForeground : colors.foreground }]}>{message.text}</Text>
+              {message.sender === 'friend' && (
+                <Pressable accessibilityLabel="Read this reply aloud" testID={`speak-${message.id}`} onPress={() => speakMessage(message.text)} style={styles.speakButton}>
+                  <Feather name="volume-2" size={14} color={colors.primary} />
+                  <Text style={[styles.speakLabel, { color: colors.primary }]}>Read aloud</Text>
+                </Pressable>
+              )}
               <Text style={[styles.timeText, { color: message.sender === 'user' ? colors.coralSoft : colors.mutedForeground }]}>{message.time}</Text>
             </View>
           </View>
@@ -131,8 +286,13 @@ export default function ChatScreen() {
             multiline
             editable={!isChatting}
           />
-          <Pressable disabled={isChatting} onPress={() => setDraft((current) => (current ? current : 'I want to use voice commands'))} style={({ pressed }) => [styles.micButton, { backgroundColor: colors.secondary, opacity: isChatting ? 0.45 : pressed ? 0.75 : 1 }]}>
-            <Feather name="mic" size={17} color={colors.secondaryForeground} />
+          {settings.headphoneControls && (
+            <Pressable accessibilityLabel={isSpeaking ? 'Pause spoken reply' : 'Play latest reply through supported audio'} disabled={isChatting || !latestFriendMessage} onPress={toggleSpeech} style={({ pressed }) => [styles.micButton, { backgroundColor: colors.secondary, opacity: isChatting || !latestFriendMessage ? 0.45 : pressed ? 0.75 : 1 }]}>
+              <Feather name={isSpeaking ? 'pause' : 'headphones'} size={17} color={colors.secondaryForeground} />
+            </Pressable>
+          )}
+          <Pressable accessibilityLabel={isListening ? 'Stop voice command' : 'Start voice command'} testID="voice-command" disabled={isChatting} onPress={() => void startVoiceCommand()} style={({ pressed }) => [styles.micButton, { backgroundColor: isListening ? colors.primary : colors.secondary, opacity: isChatting ? 0.45 : pressed ? 0.75 : 1 }]}>
+            <Feather name={isListening ? 'square' : 'mic'} size={17} color={isListening ? colors.primaryForeground : colors.secondaryForeground} />
           </Pressable>
           <Pressable disabled={isChatting} onPress={submit} style={({ pressed }) => [styles.sendButton, { backgroundColor: draft.trim() && !isChatting ? colors.primary : colors.muted, opacity: isChatting ? 0.55 : pressed ? 0.78 : 1 }]}>
             <Feather name="arrow-up" size={18} color={draft.trim() && !isChatting ? colors.primaryForeground : colors.mutedForeground} />
@@ -201,6 +361,8 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: '80%', borderRadius: 20, paddingHorizontal: 15, paddingTop: 12, paddingBottom: 9 },
   messageText: { fontSize: 14, lineHeight: 21, fontFamily: 'Inter_400Regular' },
   timeText: { fontSize: 9, fontFamily: 'Inter_500Medium', marginTop: 6, textAlign: 'right' },
+  speakButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 9 },
+  speakLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   notice: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: 15, padding: 11, marginBottom: 15 },
   noticeText: { flex: 1, fontSize: 11, lineHeight: 16, fontFamily: 'Inter_500Medium' },
   typingRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 14 },

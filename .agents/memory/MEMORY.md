@@ -1,1 +1,2 @@
 - [Managed AI availability](ai-provider-setup.md) — Online AI must remain optional and surface an explicit offline fallback when provider variables are not provisioned.
+- [Expo workspace dependencies](expo-workspace-dependencies.md) — App-scoped installs can mutate `.replit`; validate and restore workspace config after dependency changes.

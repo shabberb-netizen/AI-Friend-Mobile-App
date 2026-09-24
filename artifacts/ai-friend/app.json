@@ -8,9 +8,19 @@
     "scheme": "ai-friend",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "AI Friend uses your microphone only when you start a voice command.",
+        "NSLocationWhenInUseUsageDescription": "AI Friend uses your location only when you choose to make a location check-in."
+      }
     },
-    "android": {},
+    "android": {
+      "permissions": [
+        "RECORD_AUDIO",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
