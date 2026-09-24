@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/ai-friend/"
+title = "AI Friend"
+description = "A privacy-first mobile AI companion with offline and online modes, emotionally aware chat, voice controls, study help, and a creative media studio."
+version = "1.0.0"
+id = "artifacts/ai-friend"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/ai-friend/" ]
+localPort = 19534
+
+[services.development]
+run = "pnpm --filter @workspace/ai-friend run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ai-friend", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/ai-friend", "run", "serve" ]
+
+[services.env]
+PORT = "19534"
+BASE_PATH = "/ai-friend/"

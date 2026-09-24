@@ -1,6 +1,6 @@
-# [Project name]
+# AI Friend
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+AI Friend is a privacy-first Expo mobile companion for local-first chat, study help, creative media prompts, and permission-controlled device features.
 
 ## Run & Operate
 
@@ -22,23 +22,36 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/ai-friend/app/(tabs)/` — Home, Chat, Create, and Settings screens.
+- `artifacts/ai-friend/context/AppContext.tsx` — local AsyncStorage-backed settings and conversation state.
+- `artifacts/ai-friend/constants/colors.ts` — companion palette and semantic theme tokens.
+- `artifacts/ai-friend/assets/images/` — app icon and generated creative-story imagery.
+- `artifacts/api-server/` — shared Express server reserved for future synced accounts and cloud AI routes.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The first mobile build is frontend-first and local-first: AsyncStorage keeps the core experience useful without internet.
+- Online/offline mode is explicit and visible; future cloud AI must not silently receive private content.
+- Location, email, voice, earbuds, calls, and social connections are opt-in capabilities controlled by the device OS and supported APIs.
+- Expo Router tabs keep the main companion flows one tap away while leaving deeper integrations modular.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Home provides a warm companion entry point, offline privacy status, shortcuts, and a saved story preview.
+- Chat supports persistent local text conversation, study prompts, emotional check-ins, and creation prompts.
+- Create supports Image, Video, and Story intent selection, prompt drafting, creative edit intents, and local gallery previews.
+- Settings exposes the online/offline switch and explicit controls for location check-ins, email check-ins, voice commands, and earbud controls.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- The user wants an AI friend that feels friendly and human, supports romantic or friendly conversation, helps with coding and study, and can work with or without internet.
+- The user wants future support for image editing, clothing/background/body-measurement changes, story and short-video creation, voice commands, earbuds, location, phone actions, and supported social apps.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Do not present phone control, tracking, microphone, email, call answering, or social integrations as active until their native permissions and supported APIs are implemented.
+- Expo preview can log a non-blocking React Native DevTools `libglib-2.0.so.0` warning in this environment; Metro can still run normally.
+- Keep the local-first behavior intact when adding online AI; mode changes should remain user-controlled.
 
 ## Pointers
 
