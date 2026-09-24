@@ -41,7 +41,7 @@ export default function HomeScreen() {
         <Feather name="chevron-right" size={15} color={isOffline ? colors.mintText : colors.primary} />
       </Pressable>
 
-      <LinearGradient colors={[colors.indigo, colors.indigoSoft]} style={[styles.hero, { borderColor: colors.border }]}>
+      <LinearGradient colors={[colors.background, colors.background]} style={[styles.hero, { borderColor: colors.border }]}>
         <View style={styles.heroCopy}>
           <View style={styles.liveDot}>
             <View style={[styles.liveDotInner, { backgroundColor: colors.primary }]} />
