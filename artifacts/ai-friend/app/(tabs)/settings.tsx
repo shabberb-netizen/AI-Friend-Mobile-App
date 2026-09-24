@@ -1,4 +1,6 @@
 import { Feather } from '@expo/vector-icons';
+import { useAuth, useUser } from '@clerk/expo';
+import { router } from 'expo-router';
 import React from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +13,8 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { settings, toggleMode, updateSetting } = useApp();
   const { screenMode, setScreenMode } = useThemeMode();
+  const { isSignedIn } = useAuth();
+  const { user } = useUser();
   const isOffline = settings.mode === 'offline';
 
   return (
@@ -29,6 +33,17 @@ export default function SettingsScreen() {
         </View>
       </View>
       <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Choose what AI Friend can access. Nothing sensitive turns on silently.</Text>
+
+      <View style={[styles.accountCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.accountIcon, { backgroundColor: colors.accent }]}><Feather name={isSignedIn ? 'check-circle' : 'user'} size={17} color={colors.accentForeground} /></View>
+        <View style={styles.accountCopy}>
+          <Text style={[styles.accountTitle, { color: colors.foreground }]}>{isSignedIn ? 'Account connected' : 'Connect your account'}</Text>
+          <Text style={[styles.accountBody, { color: colors.mutedForeground }]}>{isSignedIn ? user?.primaryEmailAddress?.emailAddress ?? 'Signed in securely' : 'Sync trusted friends, messages, and safety circles across devices.'}</Text>
+        </View>
+        <Pressable onPress={() => router.push(isSignedIn ? '/(auth)/sign-in' : '/(auth)/sign-in')} style={[styles.accountButton, { backgroundColor: colors.secondary }]}>
+          <Text style={[styles.accountButtonText, { color: colors.secondaryForeground }]}>{isSignedIn ? 'Manage' : 'Sign in'}</Text>
+        </Pressable>
+      </View>
 
       <Pressable onPress={toggleMode} style={({ pressed }) => [styles.modeCard, { backgroundColor: isOffline ? colors.indigo : colors.primary, opacity: pressed ? 0.9 : 1 }]}>
         <View style={[styles.modeCardIcon, { backgroundColor: isOffline ? colors.violet : colors.coralSoft }]}>
@@ -134,6 +149,13 @@ const styles = StyleSheet.create({
   modeLabel: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 1.3, marginBottom: 4 },
   modeTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', marginBottom: 4 },
   modeBody: { fontSize: 11, lineHeight: 16, fontFamily: 'Inter_400Regular' },
+  accountCard: { marginHorizontal: 22, marginTop: 17, borderWidth: 1, borderRadius: 20, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  accountIcon: { width: 35, height: 35, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  accountCopy: { flex: 1 },
+  accountTitle: { fontSize: 12, fontFamily: 'Inter_700Bold', marginBottom: 3 },
+  accountBody: { fontSize: 10, lineHeight: 14, fontFamily: 'Inter_400Regular' },
+  accountButton: { borderRadius: 11, paddingHorizontal: 10, paddingVertical: 8 },
+  accountButtonText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
   displayCard: { marginHorizontal: 22, borderWidth: 1, borderRadius: 22, padding: 14, shadowColor: '#000000', shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
   displayHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   displayIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
