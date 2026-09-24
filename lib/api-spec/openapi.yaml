@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: ai
+    description: AI Friend chat and creative generation
 paths:
   /healthz:
     get:
@@ -24,6 +26,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /ai/generate:
+    post:
+      operationId: generateAiAsset
+      tags: [ai]
+      summary: Generate a creative asset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateAiAssetRequest"
+      responses:
+        "200":
+          description: Generated asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedAiAsset"
+        "400":
+          description: Invalid request
+        "503":
+          description: AI provider unavailable
 components:
   schemas:
     HealthStatus:
@@ -33,4 +57,50 @@ components:
           type: string
       required:
         - status
+    GenerateAiAssetRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [image, story, video]
+        prompt:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        action:
+          type: string
+          maxLength: 120
+      required:
+        - type
+        - prompt
+    GeneratedAiAsset:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [image, story, video]
+        title:
+          type: string
+        prompt:
+          type: string
+        uri:
+          type: string
+        text:
+          type: string
+        mimeType:
+          type: string
+        status:
+          type: string
+          enum: [complete, queued]
+        provider:
+          type: string
+      required:
+        - id
+        - type
+        - title
+        - prompt
+        - status
+        - provider
 

@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetch as expoFetch } from 'expo/fetch';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { generateAiAsset, type GenerateAiAssetRequest, type GeneratedAiAsset } from '@workspace/api-client-react';
 
 export type AppMode = 'online' | 'offline';
 export type RoleplayMode = 'friend' | 'study' | 'romantic';
@@ -8,6 +10,10 @@ export type Message = {
   text: string;
   sender: 'user' | 'friend';
   time: string;
+};
+
+export type GalleryAsset = GeneratedAiAsset & {
+  localKey?: 'sunlit' | 'blueHour';
 };
 
 export type AppSettings = {
@@ -22,11 +28,18 @@ type AppContextValue = {
   settings: AppSettings;
   messages: Message[];
   roleplayMode: RoleplayMode;
+  gallery: GalleryAsset[];
   hydrated: boolean;
+  isChatting: boolean;
+  chatError: string | null;
+  isGenerating: boolean;
+  generationError: string | null;
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
   toggleMode: () => void;
   setRoleplayMode: (mode: RoleplayMode) => void;
-  sendMessage: (text: string) => void;
+  sendMessage: (text: string) => Promise<void>;
+  createAsset: (request: Omit<GenerateAiAssetRequest, 'prompt'> & { prompt: string }) => Promise<GalleryAsset | null>;
+  saveAsset: (asset: GalleryAsset) => Promise<void>;
 };
 
 const STORAGE_KEY = 'ai-friend-local-state';
@@ -82,19 +95,81 @@ function makeFriendReply(text: string, mode: AppMode, roleplayMode: RoleplayMode
   return 'I’m with you. We can keep talking, make a plan, or turn that thought into something useful.';
 }
 
+function apiUrl(path: string) {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  return domain ? `https://${domain}${path}` : path;
+}
+
+function makeId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+async function readError(response: Response) {
+  const body = await response.text().catch(() => '');
+  try {
+    const parsed = JSON.parse(body) as { error?: string };
+    return parsed.error ?? `Request failed (${response.status})`;
+  } catch {
+    return body || `Request failed (${response.status})`;
+  }
+}
+
+async function streamOnlineChat(
+  history: Array<{ role: 'user' | 'assistant'; content: string }>,
+  onContent: (content: string) => void,
+) {
+  const response = await expoFetch(apiUrl('/api/ai/chat'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    body: JSON.stringify({ messages: history }),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Online AI returned no response stream.');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullContent = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6).trim();
+      if (!data) continue;
+      const parsed = JSON.parse(data) as { content?: string; error?: string };
+      if (parsed.error) throw new Error(parsed.error);
+      if (parsed.content) {
+        fullContent += parsed.content;
+        onContent(parsed.content);
+      }
+    }
+  }
+  if (!fullContent) throw new Error('Online AI returned an empty response.');
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [roleplayMode, setRoleplayMode] = useState<RoleplayMode>('friend');
+  const [gallery, setGallery] = useState<GalleryAsset[]>([]);
   const [hydrated, setHydrated] = useState<boolean>(false);
+  const [isChatting, setIsChatting] = useState<boolean>(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (!stored) return;
-        const parsed = JSON.parse(stored) as Partial<{ settings: AppSettings; messages: Message[]; roleplayMode: RoleplayMode }>;
+        const parsed = JSON.parse(stored) as Partial<{ settings: AppSettings; messages: Message[]; gallery: GalleryAsset[]; roleplayMode: RoleplayMode }>;
         if (parsed.settings) setSettings({ ...initialSettings, ...parsed.settings });
         if (parsed.messages?.length) setMessages(parsed.messages);
+        if (parsed.gallery?.length) setGallery(parsed.gallery);
         if (parsed.roleplayMode) setRoleplayMode(parsed.roleplayMode);
       })
       .catch(() => undefined)
@@ -103,30 +178,111 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ settings, messages, roleplayMode })).catch(() => undefined);
-  }, [hydrated, messages, roleplayMode, settings]);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ settings, messages, gallery, roleplayMode })).catch(() => undefined);
+  }, [gallery, hydrated, messages, roleplayMode, settings]);
 
   const value = useMemo<AppContextValue>(
     () => ({
       settings,
       messages,
       roleplayMode,
+      gallery,
       hydrated,
+      isChatting,
+      chatError,
+      isGenerating,
+      generationError,
       updateSetting: (key, value) => setSettings((current) => ({ ...current, [key]: value })),
       toggleMode: () => setSettings((current) => ({ ...current, mode: current.mode === 'offline' ? 'online' : 'offline' })),
       setRoleplayMode,
-      sendMessage: (text) => {
+      sendMessage: async (text) => {
         const cleanText = text.trim();
         if (!cleanText) return;
         const time = nowLabel();
-        setMessages((current) => [
-          ...current,
-          { id: `${Date.now()}-user`, text: cleanText, sender: 'user', time },
-          { id: `${Date.now()}-friend`, text: makeFriendReply(cleanText, settings.mode, roleplayMode), sender: 'friend', time },
-        ]);
+        const userMessage = { id: makeId('user'), text: cleanText, sender: 'user' as const, time };
+        const currentMessages = [...messages];
+        setChatError(null);
+        setMessages((current) => [...current, userMessage]);
+
+        if (settings.mode === 'offline') {
+          setMessages((current) => [
+            ...current,
+            { id: makeId('friend'), text: makeFriendReply(cleanText, settings.mode, roleplayMode), sender: 'friend', time },
+          ]);
+          return;
+        }
+
+        setIsChatting(true);
+        let assistantId: string | null = null;
+        let assistantText = '';
+        try {
+          await streamOnlineChat(
+            [
+              ...currentMessages
+                .filter((message) => message.sender === 'user' || message.sender === 'friend')
+                .map((message) => ({ role: message.sender === 'friend' ? ('assistant' as const) : ('user' as const), content: message.text })),
+              { role: 'user', content: roleplayMode === 'friend' ? cleanText : `[Fictional ${roleplayMode} role-play] ${cleanText}` },
+            ],
+            (content) => {
+              assistantText += content;
+              if (!assistantId) {
+                assistantId = makeId('friend');
+                setMessages((current) => [...current, { id: assistantId!, text: assistantText, sender: 'friend', time: nowLabel() }]);
+              } else {
+                setMessages((current) => current.map((message) => (message.id === assistantId ? { ...message, text: assistantText } : message)));
+              }
+            },
+          );
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : 'Online AI could not answer.';
+          setChatError(`Online unavailable — using offline fallback. ${reason}`);
+          setMessages((current) => [
+            ...current,
+            {
+              id: makeId('friend'),
+              text: `${makeFriendReply(cleanText, 'offline', roleplayMode)} This answer stayed on your phone because Online mode was unavailable.`,
+              sender: 'friend',
+              time: nowLabel(),
+            },
+          ]);
+        } finally {
+          setIsChatting(false);
+        }
+      },
+      createAsset: async (request) => {
+        const prompt = request.prompt.trim();
+        if (!prompt) return null;
+        setGenerationError(null);
+        setIsGenerating(true);
+        try {
+          if (settings.mode === 'offline') {
+            const localAsset: GalleryAsset = {
+              id: makeId('local'),
+              type: request.type,
+              title: request.action ?? (request.type === 'video' ? 'Offline motion idea' : 'Offline idea'),
+              prompt,
+              text: request.type === 'story' ? `A small beginning:\n\n${prompt}\n\nKeep this idea close and build it one gentle step at a time.` : undefined,
+              localKey: request.type === 'story' ? 'blueHour' : 'sunlit',
+              status: 'complete',
+              provider: 'On-device preview',
+            };
+            return localAsset;
+          }
+          const asset = await generateAiAsset(request);
+          return asset;
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : 'Online generation failed.';
+          setGenerationError(`Could not create this online. ${reason}`);
+          return null;
+        } finally {
+          setIsGenerating(false);
+        }
+      },
+      saveAsset: async (asset) => {
+        setGallery((current) => [asset, ...current.filter((item) => item.id !== asset.id)].slice(0, 20));
       },
     }),
-    [hydrated, messages, roleplayMode, settings],
+    [chatError, gallery, generationError, hydrated, isChatting, isGenerating, messages, roleplayMode, settings],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

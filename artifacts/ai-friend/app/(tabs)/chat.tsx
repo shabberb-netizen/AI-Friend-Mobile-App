@@ -10,14 +10,14 @@ import { useColors } from '@/hooks/useColors';
 export default function ChatScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { messages, settings, roleplayMode, setRoleplayMode, sendMessage } = useApp();
+  const { messages, settings, roleplayMode, setRoleplayMode, sendMessage, isChatting, chatError } = useApp();
   const [draft, setDraft] = useState<string>('');
   const [showRoleplay, setShowRoleplay] = useState<boolean>(false);
   const isOffline = settings.mode === 'offline';
 
   const submit = () => {
     if (!draft.trim()) return;
-    sendMessage(draft);
+    void sendMessage(draft);
     setDraft('');
   };
 
@@ -39,9 +39,14 @@ export default function ChatScreen() {
             </View>
           </View>
         </View>
-        <Pressable onPress={() => setShowRoleplay((current) => !current)} style={styles.headerButton}>
-          <Feather name="users" size={19} color={showRoleplay ? colors.primary : colors.mutedForeground} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable onPress={() => setShowRoleplay((current) => !current)} style={styles.headerButton}>
+            <Feather name="users" size={19} color={showRoleplay ? colors.primary : colors.mutedForeground} />
+          </Pressable>
+          <Pressable onPress={() => router.push('/settings')} style={styles.headerButton}>
+            <Feather name="sliders" size={19} color={colors.mutedForeground} />
+          </Pressable>
+        </View>
       </View>
       {showRoleplay && (
           <View style={[styles.roleplayPanel, { backgroundColor: colors.card, borderBottomColor: colors.border, shadowColor: '#000000', shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 9 }, elevation: 7 }]}>
@@ -55,30 +60,9 @@ export default function ChatScreen() {
             </Pressable>
           </View>
           <View style={styles.roleplayOptions}>
-            <RoleplayOption
-              icon="heart"
-              title="Everyday friend"
-              subtitle="Warm and honest"
-              selected={roleplayMode === 'friend'}
-              onPress={() => { setRoleplayMode('friend'); setShowRoleplay(false); }}
-              colors={colors}
-            />
-            <RoleplayOption
-              icon="book-open"
-              title="Study buddy"
-              subtitle="Focused and clear"
-              selected={roleplayMode === 'study'}
-              onPress={() => { setRoleplayMode('study'); setShowRoleplay(false); }}
-              colors={colors}
-            />
-            <RoleplayOption
-              icon="star"
-              title="Romantic companion"
-              subtitle="Fictional and consensual"
-              selected={roleplayMode === 'romantic'}
-              onPress={() => { setRoleplayMode('romantic'); setShowRoleplay(false); }}
-              colors={colors}
-            />
+            <RoleplayOption icon="heart" title="Everyday friend" subtitle="Warm and honest" selected={roleplayMode === 'friend'} onPress={() => { setRoleplayMode('friend'); setShowRoleplay(false); }} colors={colors} />
+            <RoleplayOption icon="book-open" title="Study buddy" subtitle="Focused and clear" selected={roleplayMode === 'study'} onPress={() => { setRoleplayMode('study'); setShowRoleplay(false); }} colors={colors} />
+            <RoleplayOption icon="star" title="Romantic companion" subtitle="Fictional and consensual" selected={roleplayMode === 'romantic'} onPress={() => { setRoleplayMode('romantic'); setShowRoleplay(false); }} colors={colors} />
           </View>
         </View>
       )}
@@ -97,6 +81,12 @@ export default function ChatScreen() {
           </Text>
           <Text style={[styles.roleplayBadgeHint, { color: colors.mutedForeground }]}>· fictional</Text>
         </View>
+        {chatError && (
+          <View style={[styles.notice, { backgroundColor: colors.secondary }]}>
+            <Feather name="shield" size={15} color={colors.secondaryForeground} />
+            <Text style={[styles.noticeText, { color: colors.secondaryForeground }]}>{chatError}</Text>
+          </View>
+        )}
         {messages.map((message) => (
           <View key={message.id} style={[styles.messageRow, message.sender === 'user' ? styles.userRow : styles.friendRow]}>
             {message.sender === 'friend' && (
@@ -110,11 +100,21 @@ export default function ChatScreen() {
             </View>
           </View>
         ))}
+        {isChatting && (
+          <View style={styles.typingRow}>
+            <View style={[styles.smallAvatar, { backgroundColor: colors.secondary }]}>
+              <Feather name="heart" size={12} color={colors.primary} />
+            </View>
+            <View style={[styles.typingBubble, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.typingText, { color: colors.mutedForeground }]}>Thinking…</Text>
+            </View>
+          </View>
+        )}
         <Text style={[styles.prompt, { color: colors.mutedForeground }]}>Try one of these</Text>
         <View style={styles.chips}>
-          <QuickPrompt text="Help me study" icon="book-open" onPress={() => sendMessage('Help me study')} colors={colors} />
+          <QuickPrompt text="Help me study" icon="book-open" onPress={() => void sendMessage('Help me study')} colors={colors} />
           <QuickPrompt text="Make an image" icon="aperture" onPress={() => router.push('/create')} colors={colors} />
-          <QuickPrompt text="I need to talk" icon="heart" onPress={() => sendMessage('I need to talk')} colors={colors} />
+          <QuickPrompt text="I need to talk" icon="heart" onPress={() => void sendMessage('I need to talk')} colors={colors} />
         </View>
       </ScrollView>
 
@@ -129,12 +129,13 @@ export default function ChatScreen() {
             style={[styles.input, { color: colors.foreground }]}
             returnKeyType="send"
             multiline
+            editable={!isChatting}
           />
-          <Pressable onPress={() => setDraft((current) => (current ? current : 'I want to use voice commands'))} style={({ pressed }) => [styles.micButton, { backgroundColor: colors.secondary, opacity: pressed ? 0.75 : 1 }]}>
+          <Pressable disabled={isChatting} onPress={() => setDraft((current) => (current ? current : 'I want to use voice commands'))} style={({ pressed }) => [styles.micButton, { backgroundColor: colors.secondary, opacity: isChatting ? 0.45 : pressed ? 0.75 : 1 }]}>
             <Feather name="mic" size={17} color={colors.secondaryForeground} />
           </Pressable>
-          <Pressable onPress={submit} style={({ pressed }) => [styles.sendButton, { backgroundColor: draft.trim() ? colors.primary : colors.muted, opacity: pressed ? 0.78 : 1 }]}>
-            <Feather name="arrow-up" size={18} color={draft.trim() ? colors.primaryForeground : colors.mutedForeground} />
+          <Pressable disabled={isChatting} onPress={submit} style={({ pressed }) => [styles.sendButton, { backgroundColor: draft.trim() && !isChatting ? colors.primary : colors.muted, opacity: isChatting ? 0.55 : pressed ? 0.78 : 1 }]}>
+            <Feather name="arrow-up" size={18} color={draft.trim() && !isChatting ? colors.primaryForeground : colors.mutedForeground} />
           </Pressable>
         </View>
       </View>
@@ -170,6 +171,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingBottom: 14, borderBottomWidth: 1 },
   headerButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
   headerIdentity: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   friendAvatar: { width: 37, height: 37, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 14, fontFamily: 'Inter_700Bold', marginBottom: 3 },
@@ -199,6 +201,11 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: '80%', borderRadius: 20, paddingHorizontal: 15, paddingTop: 12, paddingBottom: 9 },
   messageText: { fontSize: 14, lineHeight: 21, fontFamily: 'Inter_400Regular' },
   timeText: { fontSize: 9, fontFamily: 'Inter_500Medium', marginTop: 6, textAlign: 'right' },
+  notice: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: 15, padding: 11, marginBottom: 15 },
+  noticeText: { flex: 1, fontSize: 11, lineHeight: 16, fontFamily: 'Inter_500Medium' },
+  typingRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 14 },
+  typingBubble: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
+  typingText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
   prompt: { fontSize: 11, fontFamily: 'Inter_600SemiBold', marginTop: 7, marginBottom: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 15, paddingHorizontal: 11, paddingVertical: 9 },
