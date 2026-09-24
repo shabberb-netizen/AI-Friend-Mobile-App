@@ -39,6 +39,7 @@ AI Friend is a privacy-first Expo mobile companion for local-first chat, study h
 
 - Home provides a warm companion entry point, offline privacy status, shortcuts, and a saved story preview.
 - Chat supports persistent local text conversation, study prompts, emotional check-ins, and creation prompts.
+- Chat includes clearly labeled fictional role-play modes for an everyday friend, study buddy, and romantic companion.
 - Create supports Image, Video, and Story intent selection, prompt drafting, creative edit intents, and local gallery previews.
 - Settings exposes the online/offline switch and explicit controls for location check-ins, email check-ins, voice commands, and earbud controls.
 

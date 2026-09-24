@@ -10,8 +10,9 @@ import { useColors } from '@/hooks/useColors';
 export default function ChatScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { messages, settings, sendMessage } = useApp();
+  const { messages, settings, roleplayMode, setRoleplayMode, sendMessage } = useApp();
   const [draft, setDraft] = useState<string>('');
+  const [showRoleplay, setShowRoleplay] = useState<boolean>(false);
   const isOffline = settings.mode === 'offline';
 
   const submit = () => {
@@ -38,10 +39,49 @@ export default function ChatScreen() {
             </View>
           </View>
         </View>
-        <Pressable onPress={() => router.push('/settings')} style={styles.headerButton}>
-          <Feather name="sliders" size={19} color={colors.mutedForeground} />
+        <Pressable onPress={() => setShowRoleplay((current) => !current)} style={styles.headerButton}>
+          <Feather name="users" size={19} color={showRoleplay ? colors.primary : colors.mutedForeground} />
         </Pressable>
       </View>
+      {showRoleplay && (
+        <View style={[styles.roleplayPanel, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+          <View style={styles.roleplayHeading}>
+            <View>
+              <Text style={[styles.roleplayTitle, { color: colors.foreground }]}>Choose a role-play</Text>
+              <Text style={[styles.roleplayHint, { color: colors.mutedForeground }]}>Fictional chat · switch anytime</Text>
+            </View>
+            <Pressable onPress={() => setShowRoleplay(false)} style={styles.closeRoleplay}>
+              <Feather name="x" size={17} color={colors.mutedForeground} />
+            </Pressable>
+          </View>
+          <View style={styles.roleplayOptions}>
+            <RoleplayOption
+              icon="heart"
+              title="Everyday friend"
+              subtitle="Warm and honest"
+              selected={roleplayMode === 'friend'}
+              onPress={() => { setRoleplayMode('friend'); setShowRoleplay(false); }}
+              colors={colors}
+            />
+            <RoleplayOption
+              icon="book-open"
+              title="Study buddy"
+              subtitle="Focused and clear"
+              selected={roleplayMode === 'study'}
+              onPress={() => { setRoleplayMode('study'); setShowRoleplay(false); }}
+              colors={colors}
+            />
+            <RoleplayOption
+              icon="star"
+              title="Romantic companion"
+              subtitle="Fictional and consensual"
+              selected={roleplayMode === 'romantic'}
+              onPress={() => { setRoleplayMode('romantic'); setShowRoleplay(false); }}
+              colors={colors}
+            />
+          </View>
+        </View>
+      )}
 
       <ScrollView
         style={styles.messages}
@@ -50,6 +90,13 @@ export default function ChatScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={[styles.dateLabel, { color: colors.mutedForeground }]}>TODAY</Text>
+        <View style={[styles.roleplayBadge, { backgroundColor: colors.secondary }]}>
+          <Feather name="users" size={13} color={colors.secondaryForeground} />
+          <Text style={[styles.roleplayBadgeText, { color: colors.secondaryForeground }]}>
+            {roleplayMode === 'romantic' ? 'Romantic companion role-play' : roleplayMode === 'study' ? 'Study buddy role-play' : 'Everyday friend role-play'}
+          </Text>
+          <Text style={[styles.roleplayBadgeHint, { color: colors.mutedForeground }]}>· fictional</Text>
+        </View>
         {messages.map((message) => (
           <View key={message.id} style={[styles.messageRow, message.sender === 'user' ? styles.userRow : styles.friendRow]}>
             {message.sender === 'friend' && (
@@ -104,6 +151,21 @@ function QuickPrompt({ text, icon, onPress, colors }: { text: string; icon: Reac
   );
 }
 
+function RoleplayOption({ icon, title, subtitle, selected, onPress, colors }: { icon: React.ComponentProps<typeof Feather>['name']; title: string; subtitle: string; selected: boolean; onPress: () => void; colors: ReturnType<typeof useColors> }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.roleplayOption, { backgroundColor: selected ? colors.accent : colors.secondary, borderColor: selected ? colors.violet : colors.secondary, opacity: pressed ? 0.78 : 1 }]}>
+      <View style={[styles.roleplayIcon, { backgroundColor: selected ? colors.card : colors.muted }]}>
+        <Feather name={icon} size={15} color={selected ? colors.primary : colors.secondaryForeground} />
+      </View>
+      <View style={styles.roleplayOptionCopy}>
+        <Text style={[styles.roleplayOptionTitle, { color: colors.foreground }]}>{title}</Text>
+        <Text style={[styles.roleplayOptionSubtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
+      </View>
+      {selected && <Feather name="check" size={16} color={colors.primary} />}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingBottom: 14, borderBottomWidth: 1 },
@@ -114,8 +176,22 @@ const styles = StyleSheet.create({
   statusLine: { flexDirection: 'row', gap: 5, alignItems: 'center' },
   statusDot: { width: 6, height: 6, borderRadius: 4 },
   statusText: { fontSize: 10, fontFamily: 'Inter_500Medium' },
+  roleplayPanel: { borderBottomWidth: 1, paddingHorizontal: 18, paddingTop: 13, paddingBottom: 15 },
+  roleplayHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 },
+  roleplayTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', marginBottom: 3 },
+  roleplayHint: { fontSize: 10, fontFamily: 'Inter_400Regular' },
+  closeRoleplay: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  roleplayOptions: { gap: 7 },
+  roleplayOption: { minHeight: 48, borderRadius: 15, borderWidth: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 9, gap: 9 },
+  roleplayIcon: { width: 30, height: 30, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  roleplayOptionCopy: { flex: 1 },
+  roleplayOptionTitle: { fontSize: 11, fontFamily: 'Inter_700Bold', marginBottom: 2 },
+  roleplayOptionSubtitle: { fontSize: 9, fontFamily: 'Inter_400Regular' },
   messages: { flex: 1 },
   dateLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1.2, textAlign: 'center', marginBottom: 22 },
+  roleplayBadge: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 13, marginBottom: 17 },
+  roleplayBadgeText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  roleplayBadgeHint: { fontSize: 9, fontFamily: 'Inter_400Regular' },
   messageRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 14, gap: 8 },
   userRow: { justifyContent: 'flex-end' },
   friendRow: { justifyContent: 'flex-start' },

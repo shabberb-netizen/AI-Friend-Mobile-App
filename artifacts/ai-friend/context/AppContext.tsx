@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 export type AppMode = 'online' | 'offline';
+export type RoleplayMode = 'friend' | 'study' | 'romantic';
 export type Message = {
   id: string;
   text: string;
@@ -20,9 +21,11 @@ export type AppSettings = {
 type AppContextValue = {
   settings: AppSettings;
   messages: Message[];
+  roleplayMode: RoleplayMode;
   hydrated: boolean;
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
   toggleMode: () => void;
+  setRoleplayMode: (mode: RoleplayMode) => void;
   sendMessage: (text: string) => void;
 };
 
@@ -50,8 +53,20 @@ function nowLabel() {
   return new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit' }).format(new Date());
 }
 
-function makeFriendReply(text: string, mode: AppMode) {
+function makeFriendReply(text: string, mode: AppMode, roleplayMode: RoleplayMode) {
   const normalized = text.toLowerCase();
+  if (roleplayMode === 'romantic') {
+    if (normalized.includes('sad') || normalized.includes('lonely') || normalized.includes('stress')) {
+      return 'Come a little closer to the conversation. I’m listening, and we can take this one gentle step at a time.';
+    }
+    return 'In this fictional romantic role-play, I’m right here with you. Tell me what kind of moment you want to imagine.';
+  }
+  if (roleplayMode === 'study') {
+    return 'Your study buddy is ready. Give me the subject, the part that feels difficult, and how much time you have today.';
+  }
+  if (roleplayMode === 'friend') {
+    return 'I’m here as your fictional everyday friend. Tell me the honest version, even if it is messy.';
+  }
   if (normalized.includes('study') || normalized.includes('learn')) {
     return 'Absolutely. Tell me the subject and your deadline, and I’ll turn it into a small, manageable study plan.';
   }
@@ -70,15 +85,17 @@ function makeFriendReply(text: string, mode: AppMode) {
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [roleplayMode, setRoleplayMode] = useState<RoleplayMode>('friend');
   const [hydrated, setHydrated] = useState<boolean>(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (!stored) return;
-        const parsed = JSON.parse(stored) as Partial<{ settings: AppSettings; messages: Message[] }>;
+        const parsed = JSON.parse(stored) as Partial<{ settings: AppSettings; messages: Message[]; roleplayMode: RoleplayMode }>;
         if (parsed.settings) setSettings({ ...initialSettings, ...parsed.settings });
         if (parsed.messages?.length) setMessages(parsed.messages);
+        if (parsed.roleplayMode) setRoleplayMode(parsed.roleplayMode);
       })
       .catch(() => undefined)
       .finally(() => setHydrated(true));
@@ -86,16 +103,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ settings, messages })).catch(() => undefined);
-  }, [hydrated, messages, settings]);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ settings, messages, roleplayMode })).catch(() => undefined);
+  }, [hydrated, messages, roleplayMode, settings]);
 
   const value = useMemo<AppContextValue>(
     () => ({
       settings,
       messages,
+      roleplayMode,
       hydrated,
       updateSetting: (key, value) => setSettings((current) => ({ ...current, [key]: value })),
       toggleMode: () => setSettings((current) => ({ ...current, mode: current.mode === 'offline' ? 'online' : 'offline' })),
+      setRoleplayMode,
       sendMessage: (text) => {
         const cleanText = text.trim();
         if (!cleanText) return;
@@ -103,11 +122,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setMessages((current) => [
           ...current,
           { id: `${Date.now()}-user`, text: cleanText, sender: 'user', time },
-          { id: `${Date.now()}-friend`, text: makeFriendReply(cleanText, settings.mode), sender: 'friend', time },
+          { id: `${Date.now()}-friend`, text: makeFriendReply(cleanText, settings.mode, roleplayMode), sender: 'friend', time },
         ]);
       },
     }),
-    [hydrated, messages, settings],
+    [hydrated, messages, roleplayMode, settings],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
