@@ -12,6 +12,28 @@ export type Message = {
   time: string;
 };
 
+export type Friend = {
+  id: string;
+  name: string;
+  phone: string;
+  locationSharing: boolean;
+  lastLocation?: SafetyLocation;
+};
+
+export type SafetyLocation = {
+  latitude: number;
+  longitude: number;
+  sharedAt: string;
+};
+
+export type FriendMessage = {
+  id: string;
+  friendId: string;
+  text: string;
+  sender: 'me' | 'friend';
+  time: string;
+};
+
 export type GalleryAsset = GeneratedAiAsset & {
   localKey?: 'sunlit' | 'blueHour';
 };
@@ -34,12 +56,18 @@ type AppContextValue = {
   chatError: string | null;
   isGenerating: boolean;
   generationError: string | null;
+  friends: Friend[];
+  friendMessages: FriendMessage[];
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
   toggleMode: () => void;
   setRoleplayMode: (mode: RoleplayMode) => void;
   sendMessage: (text: string) => Promise<void>;
   createAsset: (request: Omit<GenerateAiAssetRequest, 'prompt'> & { prompt: string }) => Promise<GalleryAsset | null>;
   saveAsset: (asset: GalleryAsset) => Promise<void>;
+  addFriend: (name: string, phone: string) => boolean;
+  removeFriend: (friendId: string) => void;
+  sendFriendMessage: (friendId: string, text: string) => void;
+  setFriendLocationSharing: (friendId: string, sharing: boolean, location?: SafetyLocation) => void;
 };
 
 const STORAGE_KEY = 'ai-friend-local-state';
@@ -161,16 +189,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [chatError, setChatError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friendMessages, setFriendMessages] = useState<FriendMessage[]>([]);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (!stored) return;
-        const parsed = JSON.parse(stored) as Partial<{ settings: AppSettings; messages: Message[]; gallery: GalleryAsset[]; roleplayMode: RoleplayMode }>;
+        const parsed = JSON.parse(stored) as Partial<{ settings: AppSettings; messages: Message[]; gallery: GalleryAsset[]; roleplayMode: RoleplayMode; friends: Friend[]; friendMessages: FriendMessage[] }>;
         if (parsed.settings) setSettings({ ...initialSettings, ...parsed.settings });
         if (parsed.messages?.length) setMessages(parsed.messages);
         if (parsed.gallery?.length) setGallery(parsed.gallery);
         if (parsed.roleplayMode) setRoleplayMode(parsed.roleplayMode);
+        if (parsed.friends?.length) setFriends(parsed.friends);
+        if (parsed.friendMessages?.length) setFriendMessages(parsed.friendMessages);
       })
       .catch(() => undefined)
       .finally(() => setHydrated(true));
@@ -178,8 +210,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ settings, messages, gallery, roleplayMode })).catch(() => undefined);
-  }, [gallery, hydrated, messages, roleplayMode, settings]);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ settings, messages, gallery, roleplayMode, friends, friendMessages })).catch(() => undefined);
+  }, [friendMessages, friends, gallery, hydrated, messages, roleplayMode, settings]);
 
   const value = useMemo<AppContextValue>(
     () => ({
@@ -192,6 +224,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       chatError,
       isGenerating,
       generationError,
+      friends,
+      friendMessages,
       updateSetting: (key, value) => setSettings((current) => ({ ...current, [key]: value })),
       toggleMode: () => setSettings((current) => ({ ...current, mode: current.mode === 'offline' ? 'online' : 'offline' })),
       setRoleplayMode,
@@ -281,8 +315,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       saveAsset: async (asset) => {
         setGallery((current) => [asset, ...current.filter((item) => item.id !== asset.id)].slice(0, 20));
       },
+      addFriend: (name, phone) => {
+        const cleanName = name.trim();
+        const cleanPhone = phone.trim();
+        if (!cleanName || !cleanPhone) return false;
+        setFriends((current) => [...current, { id: makeId('friend'), name: cleanName, phone: cleanPhone, locationSharing: false }]);
+        return true;
+      },
+      removeFriend: (friendId) => {
+        setFriends((current) => current.filter((friend) => friend.id !== friendId));
+        setFriendMessages((current) => current.filter((message) => message.friendId !== friendId));
+      },
+      sendFriendMessage: (friendId, text) => {
+        const cleanText = text.trim();
+        if (!cleanText) return;
+        setFriendMessages((current) => [...current, { id: makeId('friend-message'), friendId, text: cleanText, sender: 'me', time: nowLabel() }]);
+      },
+      setFriendLocationSharing: (friendId, sharing, location) => {
+        setFriends((current) => current.map((friend) => friend.id === friendId ? { ...friend, locationSharing: sharing, lastLocation: sharing ? location : undefined } : friend));
+      },
     }),
-    [chatError, gallery, generationError, hydrated, isChatting, isGenerating, messages, roleplayMode, settings],
+    [chatError, friendMessages, friends, gallery, generationError, hydrated, isChatting, isGenerating, messages, roleplayMode, settings],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

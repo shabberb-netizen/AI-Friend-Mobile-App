@@ -8,12 +8,38 @@
  * brand. If a sibling web artifact exists, read its index.css and convert the
  * HSL values to hex so both artifacts use the same palette.
  *
- * To add dark mode, add a `dark` key with the same token names.
- * The useColors() hook will automatically pick it up.
+ * Morning and night share the same semantic names so the app can switch
+ * display brightness without changing component code.
  */
 
 const colors = {
   light: {
+    text: '#241C36',
+    tint: '#FF765D',
+    background: '#FFF8F2',
+    foreground: '#241C36',
+    card: '#FFFFFF',
+    cardForeground: '#241C36',
+    primary: '#FF765D',
+    primaryForeground: '#FFFFFF',
+    secondary: '#F1EAF7',
+    secondaryForeground: '#5A4C6D',
+    muted: '#E9DFF0',
+    mutedForeground: '#80738C',
+    accent: '#F0E4FF',
+    accentForeground: '#533A76',
+    destructive: '#D85467',
+    destructiveForeground: '#FFFFFF',
+    border: '#E2D9EA',
+    input: '#E2D9EA',
+    indigo: '#F1E6FF',
+    indigoSoft: '#D6C4FA',
+    violet: '#8864E8',
+    coralSoft: '#FFE6DF',
+    mint: '#DDF3E8',
+    mintText: '#2B6A4E',
+  },
+  dark: {
     text: '#F3F1FF',
     tint: '#FF765D',
     background: '#08091B',

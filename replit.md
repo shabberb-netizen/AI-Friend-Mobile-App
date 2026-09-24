@@ -35,6 +35,8 @@ AI Friend is a privacy-first Expo mobile companion with a spatial 3D-inspired in
 - Location, email, voice, earbuds, calls, and social connections are opt-in capabilities controlled by the device OS and supported APIs.
 - Expo Router tabs keep the main companion flows one tap away while leaving deeper integrations modular.
 - The visual system uses dark depth layers, perspective transforms, raised surfaces, and an animated companion orb instead of flat white screens.
+- Display mode is local and persistent: Morning, Night, or Auto based on the device appearance setting. It changes in-app brightness and colors; hardware brightness remains opt-in.
+- Friends & Safety uses explicit actions: locally saved contacts can open the native dialer, messages stay on-device, and location check-ins require foreground permission plus per-friend sharing. Cross-device sync must use secure accounts and invitations.
 
 ## Product
 

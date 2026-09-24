@@ -3,12 +3,14 @@ import React from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppSettings, useApp } from '@/context/AppContext';
+import { ScreenMode, useThemeMode } from '@/context/ThemeContext';
 import { useColors } from '@/hooks/useColors';
 
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { settings, toggleMode, updateSetting } = useApp();
+  const { screenMode, setScreenMode } = useThemeMode();
   const isOffline = settings.mode === 'offline';
 
   return (
@@ -30,15 +32,33 @@ export default function SettingsScreen() {
 
       <Pressable onPress={toggleMode} style={({ pressed }) => [styles.modeCard, { backgroundColor: isOffline ? colors.indigo : colors.primary, opacity: pressed ? 0.9 : 1 }]}>
         <View style={[styles.modeCardIcon, { backgroundColor: isOffline ? colors.violet : colors.coralSoft }]}>
-          <Feather name={isOffline ? 'shield' : 'cloud'} size={21} color={isOffline ? colors.card : colors.primary} />
+          <Feather name={isOffline ? 'shield' : 'cloud'} size={21} color={isOffline ? colors.primaryForeground : colors.primary} />
         </View>
         <View style={styles.modeCopy}>
-          <Text style={[styles.modeLabel, { color: isOffline ? colors.accent : colors.coralSoft }]}>{isOffline ? 'OFFLINE MODE' : 'ONLINE MODE'}</Text>
-          <Text style={[styles.modeTitle, { color: colors.card }]}>{isOffline ? 'Private by default' : 'More capable, still yours'}</Text>
-          <Text style={[styles.modeBody, { color: isOffline ? colors.accent : colors.coralSoft }]}>{isOffline ? 'Chat, plan, and create with what is saved on your phone.' : 'Use cloud intelligence for richer answers and generation.'}</Text>
+          <Text style={[styles.modeLabel, { color: isOffline ? colors.accentForeground : colors.primaryForeground }]}>{isOffline ? 'OFFLINE MODE' : 'ONLINE MODE'}</Text>
+          <Text style={[styles.modeTitle, { color: isOffline ? colors.foreground : colors.primaryForeground }]}>{isOffline ? 'Private by default' : 'More capable, still yours'}</Text>
+          <Text style={[styles.modeBody, { color: isOffline ? colors.accentForeground : colors.primaryForeground }]}>{isOffline ? 'Chat, plan, and create with what is saved on your phone.' : 'Use cloud intelligence for richer answers and generation.'}</Text>
         </View>
-        <Feather name="chevron-right" size={20} color={colors.card} />
+        <Feather name="chevron-right" size={20} color={isOffline ? colors.foreground : colors.primaryForeground} />
       </Pressable>
+
+      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Screen brightness</Text>
+      <View style={[styles.displayCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.displayHeader}>
+          <View style={[styles.displayIcon, { backgroundColor: colors.secondary }]}>
+            <Feather name={screenMode === 'night' ? 'moon' : 'sun'} size={17} color={colors.secondaryForeground} />
+          </View>
+          <View style={styles.displayCopy}>
+            <Text style={[styles.displayTitle, { color: colors.foreground }]}>Choose your screen mood</Text>
+            <Text style={[styles.displayBody, { color: colors.mutedForeground }]}>This changes AI Friend’s brightness and colors, not your phone’s hardware brightness.</Text>
+          </View>
+        </View>
+        <View style={[styles.displayOptions, { backgroundColor: colors.secondary }]}>
+          <DisplayOption mode="morning" label="Morning" icon="sun" selected={screenMode === 'morning'} onPress={() => setScreenMode('morning')} colors={colors} />
+          <DisplayOption mode="night" label="Night" icon="moon" selected={screenMode === 'night'} onPress={() => setScreenMode('night')} colors={colors} />
+          <DisplayOption mode="auto" label="Auto" icon="smartphone" selected={screenMode === 'auto'} onPress={() => setScreenMode('auto')} colors={colors} />
+        </View>
+      </View>
 
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Permissions & access</Text>
       <View style={[styles.settingGroup, { backgroundColor: colors.card, borderColor: colors.border, transform: [{ perspective: 800 }, { rotateX: '3deg' }], shadowColor: '#000000', shadowOpacity: 0.28, shadowRadius: 15, shadowOffset: { width: 0, height: 10 }, elevation: 7 }]}>
@@ -92,6 +112,15 @@ function Divider({ colors }: { colors: ReturnType<typeof useColors> }) {
   return <View style={[styles.divider, { backgroundColor: colors.border }]} />;
 }
 
+function DisplayOption({ mode, label, icon, selected, onPress, colors }: { mode: ScreenMode; label: string; icon: React.ComponentProps<typeof Feather>['name']; selected: boolean; onPress: () => void; colors: ReturnType<typeof useColors> }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label} screen mode`} style={({ pressed }) => [styles.displayOption, { backgroundColor: selected ? colors.card : 'transparent', borderColor: selected ? colors.violet : 'transparent', opacity: pressed ? 0.76 : 1 }]}>
+      <Feather name={icon} size={14} color={selected ? colors.primary : colors.mutedForeground} />
+      <Text style={[styles.displayOptionText, { color: selected ? colors.foreground : colors.mutedForeground }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 22 },
@@ -105,6 +134,15 @@ const styles = StyleSheet.create({
   modeLabel: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 1.3, marginBottom: 4 },
   modeTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', marginBottom: 4 },
   modeBody: { fontSize: 11, lineHeight: 16, fontFamily: 'Inter_400Regular' },
+  displayCard: { marginHorizontal: 22, borderWidth: 1, borderRadius: 22, padding: 14, shadowColor: '#000000', shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
+  displayHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  displayIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  displayCopy: { flex: 1 },
+  displayTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', marginBottom: 3 },
+  displayBody: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_400Regular' },
+  displayOptions: { flexDirection: 'row', gap: 5, padding: 4, borderRadius: 15, marginTop: 14 },
+  displayOption: { flex: 1, minHeight: 38, borderWidth: 1, borderRadius: 11, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 5 },
+  displayOptionText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   sectionTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', marginHorizontal: 22, marginTop: 27, marginBottom: 12 },
   settingGroup: { marginHorizontal: 22, borderWidth: 1, borderRadius: 22, paddingHorizontal: 14 },
   settingRow: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 11 },
