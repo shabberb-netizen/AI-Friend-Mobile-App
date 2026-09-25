@@ -16,6 +16,7 @@ import {
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppProvider } from '@/context/AppContext';
+import { SecurityGate, SecurityProvider } from '@/context/SecurityContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { setAuthTokenGetter, setBaseUrl } from '@workspace/api-client-react';
 
@@ -66,21 +67,25 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <ClerkProvider publishableKey={clerkPublishableKey} tokenCache={tokenCache} proxyUrl={clerkProxyUrl}>
-          <AuthTransport>
-            <ThemeProvider>
-              <AppProvider>
-                <QueryClientProvider client={queryClient}>
-                  <GestureHandlerRootView style={{ flex: 1 }}>
-                    <KeyboardProvider>
-                      <RootLayoutNav />
-                    </KeyboardProvider>
-                  </GestureHandlerRootView>
-                </QueryClientProvider>
-              </AppProvider>
-            </ThemeProvider>
-          </AuthTransport>
-        </ClerkProvider>
+        <SecurityProvider>
+          <SecurityGate>
+            <ClerkProvider publishableKey={clerkPublishableKey} tokenCache={tokenCache} proxyUrl={clerkProxyUrl}>
+              <AuthTransport>
+                <ThemeProvider>
+                  <AppProvider>
+                    <QueryClientProvider client={queryClient}>
+                      <GestureHandlerRootView style={{ flex: 1 }}>
+                        <KeyboardProvider>
+                          <RootLayoutNav />
+                        </KeyboardProvider>
+                      </GestureHandlerRootView>
+                    </QueryClientProvider>
+                  </AppProvider>
+                </ThemeProvider>
+              </AuthTransport>
+            </ClerkProvider>
+          </SecurityGate>
+        </SecurityProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
   );

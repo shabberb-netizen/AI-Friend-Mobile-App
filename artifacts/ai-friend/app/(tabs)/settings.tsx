@@ -1,5 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { useAuth, useUser } from '@clerk/expo';
+import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppSettings, useApp } from '@/context/AppContext';
@@ -8,16 +9,18 @@ import { useColors } from '@/hooks/useColors';
 import * as Location from 'expo-location';
 import { requestRecordingPermissionsAsync } from 'expo-audio';
 import React, { useEffect, useState } from 'react';
-import { Alert, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, AppState, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import type { PermissionResponse } from 'expo';
+import { useSecurity } from '@/context/SecurityContext';
 
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { settings, toggleMode, updateSetting } = useApp();
   const { screenMode, setScreenMode } = useThemeMode();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, signOut } = useAuth();
   const { user } = useUser();
+  const security = useSecurity();
   const isOffline = settings.mode === 'offline';
   const [locationPermission, requestLocationPermission] = Location.useForegroundPermissions();
   const [refreshedLocationPermission, setRefreshedLocationPermission] = useState<PermissionResponse | null>(null);
@@ -142,6 +145,61 @@ export default function SettingsScreen() {
     updateSetting('voiceCommands', true);
   };
 
+  const handleBiometricToggle = async (enabled: boolean) => {
+    if (enabled) {
+      const result = await security.enableBiometric();
+      if (!result.enabled && result.message) Alert.alert('App lock not enabled', result.message);
+      return;
+    }
+    await security.setBiometricEnabled(false);
+  };
+
+  const handleProfilePhoto = async () => {
+    if (Platform.OS !== 'web') {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Photo access is off', 'Allow photo access to choose a profile picture. AI Friend will keep the selected image on this device.');
+        return;
+      }
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]?.uri) security.setProfilePhotoUri(result.assets[0].uri);
+  };
+
+  const handleDeactivation = () => {
+    if (security.deactivationRequestedAt) {
+      Alert.alert('Cancel account deactivation?', 'Your account will remain active on this device.', [
+        { text: 'Keep deactivation', style: 'cancel' },
+        { text: 'Cancel deactivation', onPress: security.cancelDeactivation },
+      ]);
+      return;
+    }
+    Alert.alert(
+      'Deactivate account?',
+      'Your account will be marked for deletion after 25 days. You can cancel during that period. Server deletion will begin only after the secure account service is connected.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Deactivate', style: 'destructive', onPress: security.requestDeactivation },
+      ],
+    );
+  };
+
+  const handleAccountButton = () => {
+    if (!isSignedIn) {
+      router.push('/(auth)/sign-in');
+      return;
+    }
+    Alert.alert('Account session', 'You are signed in securely. Signing out keeps your local offline data on this device.', [
+      { text: 'Stay signed in', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+    ]);
+  };
+
   return (
     <ScrollView
       style={[styles.screen, { backgroundColor: colors.background }]}
@@ -165,9 +223,59 @@ export default function SettingsScreen() {
           <Text style={[styles.accountTitle, { color: colors.foreground }]}>{isSignedIn ? 'Account connected' : 'Connect your account'}</Text>
           <Text style={[styles.accountBody, { color: colors.mutedForeground }]}>{isSignedIn ? user?.primaryEmailAddress?.emailAddress ?? 'Signed in securely' : 'Sync trusted friends, messages, and safety circles across devices.'}</Text>
         </View>
-        <Pressable onPress={() => router.push(isSignedIn ? '/(auth)/sign-in' : '/(auth)/sign-in')} style={[styles.accountButton, { backgroundColor: colors.secondary }]}>
+        <Pressable onPress={handleAccountButton} style={[styles.accountButton, { backgroundColor: colors.secondary }]}>
           <Text style={[styles.accountButtonText, { color: colors.secondaryForeground }]}>{isSignedIn ? 'Manage' : 'Sign in'}</Text>
         </Pressable>
+      </View>
+
+      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Account security</Text>
+      <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        {security.profilePhotoUri ? (
+          <Image source={{ uri: security.profilePhotoUri }} style={styles.profilePhoto} />
+        ) : (
+          <View style={[styles.profileAvatar, { backgroundColor: colors.primary }]}>
+            <Feather name="user" size={21} color={colors.primaryForeground} />
+          </View>
+        )}
+        <View style={styles.profileCopy}>
+          <Text style={[styles.profileName, { color: colors.foreground }]}>Profile picture</Text>
+          <Text style={[styles.profileBody, { color: colors.mutedForeground }]}>Choose a picture stored on this device.</Text>
+        </View>
+        <Pressable onPress={() => void handleProfilePhoto()} style={[styles.smallAction, { backgroundColor: colors.secondary }]}>
+          <Text style={[styles.smallActionText, { color: colors.secondaryForeground }]}>Upload</Text>
+        </Pressable>
+      </View>
+      <View style={[styles.securityGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SettingRow icon="lock" title="Face, fingerprint, or PIN lock" description="Ask for your device lock when AI Friend opens" value={security.biometricEnabled} onChange={(value) => void handleBiometricToggle(value)} colors={colors} />
+      </View>
+      <View style={[styles.verificationCard, { backgroundColor: colors.secondary }]}>
+        <View style={[styles.verificationIcon, { backgroundColor: colors.violet }]}>
+          <Feather name="shield" size={16} color={colors.primaryForeground} />
+        </View>
+        <View style={styles.verificationCopy}>
+          <Text style={[styles.verificationTitle, { color: colors.foreground }]}>Identity verification</Text>
+          <Text style={[styles.verificationBody, { color: colors.secondaryForeground }]}>Supported proof types: Aadhaar, passport, driving licence, or voter ID. A hosted KYC provider is not connected yet, so no document is uploaded or stored.</Text>
+          <Text style={[styles.verificationMeta, { color: colors.mutedForeground }]}>One person / one account can only be enforced after the provider returns a verified-ID fingerprint.</Text>
+        </View>
+      </View>
+      <View style={[styles.lifecycleCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.lifecycleCopy}>
+          <Text style={[styles.lifecycleTitle, { color: colors.foreground }]}>{security.deactivationRequestedAt ? 'Deactivation scheduled' : 'Deactivate account'}</Text>
+          <Text style={[styles.lifecycleBody, { color: colors.mutedForeground }]}>
+            {security.deactivationRequestedAt
+              ? `${security.daysUntilDeletion ?? 0} days left in the 25-day recovery period.`
+              : 'Start a 25-day recovery period before permanent deletion.'}
+          </Text>
+        </View>
+        <Pressable onPress={handleDeactivation} style={[styles.lifecycleButton, { backgroundColor: security.deactivationRequestedAt ? colors.secondary : colors.coralSoft }]}>
+          <Text style={[styles.lifecycleButtonText, { color: security.deactivationRequestedAt ? colors.secondaryForeground : colors.primary }]}>
+            {security.deactivationRequestedAt ? 'Cancel' : 'Deactivate'}
+          </Text>
+        </Pressable>
+      </View>
+      <View style={[styles.pricingCard, { backgroundColor: colors.secondary }]}>
+        <Feather name="gift" size={16} color={colors.secondaryForeground} />
+        <Text style={[styles.pricingText, { color: colors.secondaryForeground }]}>AI Friend is currently in trial mode. No payment or subscription is required.</Text>
       </View>
 
       <Pressable onPress={toggleMode} style={({ pressed }) => [styles.modeCard, { backgroundColor: isOffline ? colors.indigo : colors.primary, opacity: pressed ? 0.9 : 1 }]}>
@@ -350,8 +458,26 @@ const styles = StyleSheet.create({
   noticeText: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_500Medium', flex: 1 },
   profileCard: { marginHorizontal: 22, borderWidth: 1, borderRadius: 22, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 11 },
   profileAvatar: { width: 42, height: 42, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  profilePhoto: { width: 42, height: 42, borderRadius: 17 },
   profileCopy: { flex: 1 },
   profileName: { fontSize: 13, fontFamily: 'Inter_700Bold', marginBottom: 4 },
   profileBody: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_400Regular' },
   moreButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  smallAction: { borderRadius: 11, paddingHorizontal: 10, paddingVertical: 8 },
+  smallActionText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
+  securityGroup: { marginHorizontal: 22, borderWidth: 1, borderRadius: 22, paddingHorizontal: 14 },
+  verificationCard: { marginHorizontal: 22, marginTop: 12, borderRadius: 19, padding: 13, flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  verificationIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  verificationCopy: { flex: 1 },
+  verificationTitle: { fontSize: 12, fontFamily: 'Inter_700Bold', marginBottom: 4 },
+  verificationBody: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_500Medium' },
+  verificationMeta: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_400Regular', marginTop: 7 },
+  lifecycleCard: { marginHorizontal: 22, marginTop: 12, borderWidth: 1, borderRadius: 19, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  lifecycleCopy: { flex: 1 },
+  lifecycleTitle: { fontSize: 12, fontFamily: 'Inter_700Bold', marginBottom: 4 },
+  lifecycleBody: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_400Regular' },
+  lifecycleButton: { borderRadius: 11, paddingHorizontal: 10, paddingVertical: 8 },
+  lifecycleButtonText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
+  pricingCard: { marginHorizontal: 22, marginTop: 12, borderRadius: 17, padding: 13, flexDirection: 'row', gap: 9, alignItems: 'flex-start' },
+  pricingText: { flex: 1, fontSize: 10, lineHeight: 15, fontFamily: 'Inter_500Medium' },
 });
