@@ -13,7 +13,6 @@ import {
   Inter_700Bold,
   useFonts,
 } from '@expo-google-fonts/inter';
-import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppProvider } from '@/context/AppContext';
 import { SecurityGate, SecurityProvider } from '@/context/SecurityContext';
@@ -22,6 +21,7 @@ import { setAuthTokenGetter, setBaseUrl } from '@workspace/api-client-react';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+import { Redirect, Stack, useSegments } from 'expo-router';
 
 const queryClient = new QueryClient();
 
@@ -30,6 +30,14 @@ const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '';
 const clerkProxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
 
 function RootLayoutNav() {
+  const { isLoaded, isSignedIn } = useAuth();
+  const segments = useSegments();
+  const inAuthGroup = segments[0] === '(auth)';
+
+  if (!isLoaded) return null;
+  if (!isSignedIn && !inAuthGroup) return <Redirect href="/(auth)/sign-in" />;
+  if (isSignedIn && inAuthGroup) return <Redirect href="/(tabs)" />;
+
   return (
     <Stack screenOptions={{ headerBackTitle: 'Back' }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

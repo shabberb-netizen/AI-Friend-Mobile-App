@@ -45,3 +45,80 @@ export const GenerateAiAssetResponse = zod.object({
 })
 
 
+/**
+ * @summary Read the signed-in user's sync preference and private snapshot
+ */
+export const GetSyncStateResponse = zod.object({
+  "enabled": zod.boolean(),
+  "updatedAt": zod.string().nullable(),
+  "state": zod.record(zod.string(), zod.unknown()).describe('User-owned content saved only when cloud sync is enabled')
+})
+
+
+/**
+ * @summary Enable or disable cloud sync for the signed-in user
+ */
+export const updateSyncStateBodyClearCloudCopyDefault = false;
+
+export const UpdateSyncStateBody = zod.object({
+  "enabled": zod.boolean(),
+  "state": zod.record(zod.string(), zod.unknown()).optional().describe('User-owned content saved only when cloud sync is enabled'),
+  "clearCloudCopy": zod.boolean().default(updateSyncStateBodyClearCloudCopyDefault)
+})
+
+export const UpdateSyncStateResponse = zod.object({
+  "enabled": zod.boolean(),
+  "updatedAt": zod.string().nullable(),
+  "state": zod.record(zod.string(), zod.unknown()).describe('User-owned content saved only when cloud sync is enabled')
+})
+
+
+/**
+ * @summary List supported social connections and their granted consent
+ */
+export const ListSocialConnectionsResponseItem = zod.object({
+  "provider": zod.enum(['facebook', 'messenger', 'telegram', 'instagram']),
+  "displayName": zod.string(),
+  "description": zod.string(),
+  "readCapabilities": zod.array(zod.string()),
+  "sendCapabilities": zod.array(zod.string()),
+  "scopes": zod.array(zod.string()),
+  "connected": zod.boolean(),
+  "authorizedAt": zod.string().nullable()
+})
+export const ListSocialConnectionsResponse = zod.array(ListSocialConnectionsResponseItem)
+
+
+/**
+ * @summary Grant or revoke one social connection's supported API scopes
+ */
+export const UpdateSocialConnectionParams = zod.object({
+  "provider": zod.enum(['facebook', 'messenger', 'telegram', 'instagram'])
+})
+
+export const UpdateSocialConnectionBody = zod.object({
+  "enabled": zod.boolean()
+})
+
+export const UpdateSocialConnectionResponse = zod.object({
+  "provider": zod.enum(['facebook', 'messenger', 'telegram', 'instagram']),
+  "displayName": zod.string(),
+  "description": zod.string(),
+  "readCapabilities": zod.array(zod.string()),
+  "sendCapabilities": zod.array(zod.string()),
+  "scopes": zod.array(zod.string()),
+  "connected": zod.boolean(),
+  "authorizedAt": zod.string().nullable()
+})
+
+
+/**
+ * @summary Revoke one social connection
+ */
+export const RevokeSocialConnectionParams = zod.object({
+  "provider": zod.enum(['facebook', 'messenger', 'telegram', 'instagram'])
+})
+
+export const RevokeSocialConnectionResponse = zod.void()
+
+

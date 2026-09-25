@@ -58,3 +58,47 @@ export interface GeneratedAiAsset {
   provider: string;
 }
 
+/**
+ * User-owned content saved only when cloud sync is enabled
+ */
+export interface SyncSnapshot { [key: string]: unknown }
+
+export interface SyncState {
+  enabled: boolean;
+  /** @nullable */
+  updatedAt: string | null;
+  state: SyncSnapshot;
+}
+
+export interface SyncStateUpdate {
+  enabled: boolean;
+  state?: SyncSnapshot;
+  clearCloudCopy?: boolean;
+}
+
+export type SocialConnectionProvider = typeof SocialConnectionProvider[keyof typeof SocialConnectionProvider];
+
+
+export const SocialConnectionProvider = {
+  facebook: 'facebook',
+  messenger: 'messenger',
+  telegram: 'telegram',
+  instagram: 'instagram',
+} as const;
+
+export interface SocialConnection {
+  provider: SocialConnectionProvider;
+  displayName: string;
+  description: string;
+  readCapabilities: string[];
+  sendCapabilities: string[];
+  scopes: string[];
+  connected: boolean;
+  /** @nullable */
+  authorizedAt: string | null;
+}
+
+export interface SocialConnectionConsent {
+  enabled: boolean;
+}
+

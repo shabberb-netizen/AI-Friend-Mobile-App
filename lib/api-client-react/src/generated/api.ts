@@ -22,7 +22,11 @@ import type {
 import type {
   GenerateAiAssetRequest,
   GeneratedAiAsset,
-  HealthStatus
+  HealthStatus,
+  SocialConnection,
+  SocialConnectionConsent,
+  SyncState,
+  SyncStateUpdate
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -199,5 +203,373 @@ export const useGenerateAiAsset = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getGenerateAiAssetMutationOptions(options));
+    }
+
+export const getGetSyncStateUrl = () => {
+
+
+
+
+  return `/api/sync/state`
+}
+
+/**
+ * @summary Read the signed-in user's sync preference and private snapshot
+ */
+export const getSyncState = async ( options?: Parameters<typeof customFetch>[1]): Promise<SyncState> => {
+
+  return customFetch<SyncState>(getGetSyncStateUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSyncStateQueryKey = () => {
+    return [
+    `/api/sync/state`
+    ] as const;
+    }
+
+
+export const getGetSyncStateQueryOptions = <TData = Awaited<ReturnType<typeof getSyncState>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSyncState>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSyncStateQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSyncState>>> = ({ signal }) => getSyncState({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSyncState>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSyncStateQueryResult = NonNullable<Awaited<ReturnType<typeof getSyncState>>>
+export type GetSyncStateQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read the signed-in user's sync preference and private snapshot
+ */
+
+export function useGetSyncState<TData = Awaited<ReturnType<typeof getSyncState>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSyncState>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSyncStateQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateSyncStateUrl = () => {
+
+
+
+
+  return `/api/sync/state`
+}
+
+/**
+ * @summary Enable or disable cloud sync for the signed-in user
+ */
+export const updateSyncState = async (syncStateUpdate: SyncStateUpdate, options?: Parameters<typeof customFetch>[1]): Promise<SyncState> => {
+
+  return customFetch<SyncState>(getUpdateSyncStateUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(syncStateUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateSyncStateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSyncState>>, TError,{data: BodyType<SyncStateUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSyncState>>, TError,{data: BodyType<SyncStateUpdate>}, TContext> => {
+
+const mutationKey = ['updateSyncState'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSyncState>>, {data: BodyType<SyncStateUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateSyncState(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSyncStateMutationResult = NonNullable<Awaited<ReturnType<typeof updateSyncState>>>
+    export type UpdateSyncStateMutationBody = BodyType<SyncStateUpdate>
+    export type UpdateSyncStateMutationError = ErrorType<void>
+
+    /**
+ * @summary Enable or disable cloud sync for the signed-in user
+ */
+export const useUpdateSyncState = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSyncState>>, TError,{data: BodyType<SyncStateUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSyncState>>,
+        TError,
+        {data: BodyType<SyncStateUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateSyncStateMutationOptions(options));
+    }
+
+export const getListSocialConnectionsUrl = () => {
+
+
+
+
+  return `/api/connections`
+}
+
+/**
+ * @summary List supported social connections and their granted consent
+ */
+export const listSocialConnections = async ( options?: Parameters<typeof customFetch>[1]): Promise<SocialConnection[]> => {
+
+  return customFetch<SocialConnection[]>(getListSocialConnectionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSocialConnectionsQueryKey = () => {
+    return [
+    `/api/connections`
+    ] as const;
+    }
+
+
+export const getListSocialConnectionsQueryOptions = <TData = Awaited<ReturnType<typeof listSocialConnections>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSocialConnections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSocialConnectionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSocialConnections>>> = ({ signal }) => listSocialConnections({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSocialConnections>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSocialConnectionsQueryResult = NonNullable<Awaited<ReturnType<typeof listSocialConnections>>>
+export type ListSocialConnectionsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List supported social connections and their granted consent
+ */
+
+export function useListSocialConnections<TData = Awaited<ReturnType<typeof listSocialConnections>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSocialConnections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSocialConnectionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateSocialConnectionUrl = (provider: 'facebook' | 'messenger' | 'telegram' | 'instagram',) => {
+
+
+
+
+  return `/api/connections/${provider}/consent`
+}
+
+/**
+ * @summary Grant or revoke one social connection's supported API scopes
+ */
+export const updateSocialConnection = async (provider: 'facebook' | 'messenger' | 'telegram' | 'instagram',
+    socialConnectionConsent: SocialConnectionConsent, options?: Parameters<typeof customFetch>[1]): Promise<SocialConnection> => {
+
+  return customFetch<SocialConnection>(getUpdateSocialConnectionUrl(provider),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(socialConnectionConsent)
+  }
+);}
+
+
+
+
+
+export const getUpdateSocialConnectionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSocialConnection>>, TError,{provider: 'facebook' | 'messenger' | 'telegram' | 'instagram';data: BodyType<SocialConnectionConsent>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSocialConnection>>, TError,{provider: 'facebook' | 'messenger' | 'telegram' | 'instagram';data: BodyType<SocialConnectionConsent>}, TContext> => {
+
+const mutationKey = ['updateSocialConnection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSocialConnection>>, {provider: 'facebook' | 'messenger' | 'telegram' | 'instagram';data: BodyType<SocialConnectionConsent>}> = (props) => {
+          const {provider,data} = props ?? {};
+
+          return  updateSocialConnection(provider,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSocialConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof updateSocialConnection>>>
+    export type UpdateSocialConnectionMutationBody = BodyType<SocialConnectionConsent>
+    export type UpdateSocialConnectionMutationError = ErrorType<void>
+
+    /**
+ * @summary Grant or revoke one social connection's supported API scopes
+ */
+export const useUpdateSocialConnection = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSocialConnection>>, TError,{provider: 'facebook' | 'messenger' | 'telegram' | 'instagram';data: BodyType<SocialConnectionConsent>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSocialConnection>>,
+        TError,
+        {provider: 'facebook' | 'messenger' | 'telegram' | 'instagram';data: BodyType<SocialConnectionConsent>},
+        TContext
+      > => {
+      return useMutation(getUpdateSocialConnectionMutationOptions(options));
+    }
+
+export const getRevokeSocialConnectionUrl = (provider: 'facebook' | 'messenger' | 'telegram' | 'instagram',) => {
+
+
+
+
+  return `/api/connections/${provider}`
+}
+
+/**
+ * @summary Revoke one social connection
+ */
+export const revokeSocialConnection = async (provider: 'facebook' | 'messenger' | 'telegram' | 'instagram', options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getRevokeSocialConnectionUrl(provider),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevokeSocialConnectionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeSocialConnection>>, TError,{provider: 'facebook' | 'messenger' | 'telegram' | 'instagram'}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeSocialConnection>>, TError,{provider: 'facebook' | 'messenger' | 'telegram' | 'instagram'}, TContext> => {
+
+const mutationKey = ['revokeSocialConnection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeSocialConnection>>, {provider: 'facebook' | 'messenger' | 'telegram' | 'instagram'}> = (props) => {
+          const {provider} = props ?? {};
+
+          return  revokeSocialConnection(provider,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeSocialConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof revokeSocialConnection>>>
+
+    export type RevokeSocialConnectionMutationError = ErrorType<void>
+
+    /**
+ * @summary Revoke one social connection
+ */
+export const useRevokeSocialConnection = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeSocialConnection>>, TError,{provider: 'facebook' | 'messenger' | 'telegram' | 'instagram'}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeSocialConnection>>,
+        TError,
+        {provider: 'facebook' | 'messenger' | 'telegram' | 'instagram'},
+        TContext
+      > => {
+      return useMutation(getRevokeSocialConnectionMutationOptions(options));
     }
 

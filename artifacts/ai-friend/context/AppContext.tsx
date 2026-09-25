@@ -1,7 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '@clerk/expo';
 import { fetch as expoFetch } from 'expo/fetch';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { generateAiAsset, type GenerateAiAssetRequest, type GeneratedAiAsset } from '@workspace/api-client-react';
+import {
+  generateAiAsset,
+  getSyncState,
+  updateSyncState,
+  type GenerateAiAssetRequest,
+  type GeneratedAiAsset,
+  type SyncSnapshot,
+} from '@workspace/api-client-react';
 
 export type AppMode = 'online' | 'offline';
 export type RoleplayMode = 'friend' | 'study' | 'romantic';
@@ -40,6 +48,7 @@ export type GalleryAsset = GeneratedAiAsset & {
 
 export type AppSettings = {
   mode: AppMode;
+  cloudSync: boolean;
   locationCheckIns: boolean;
   emailCheckIns: boolean;
   voiceCommands: boolean;
@@ -56,9 +65,11 @@ type AppContextValue = {
   chatError: string | null;
   isGenerating: boolean;
   generationError: string | null;
+  syncError: string | null;
   friends: Friend[];
   friendMessages: FriendMessage[];
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
+  setCloudSync: (enabled: boolean) => Promise<void>;
   toggleMode: () => void;
   setRoleplayMode: (mode: RoleplayMode) => void;
   sendMessage: (text: string) => Promise<void>;
@@ -73,6 +84,7 @@ type AppContextValue = {
 const STORAGE_KEY = 'ai-friend-local-state';
 const initialSettings: AppSettings = {
   mode: 'offline',
+  cloudSync: false,
   locationCheckIns: false,
   emailCheckIns: false,
   voiceCommands: false,
@@ -180,6 +192,7 @@ async function streamOnlineChat(
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const { isSignedIn } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [roleplayMode, setRoleplayMode] = useState<RoleplayMode>('friend');
@@ -189,6 +202,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [chatError, setChatError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncReady, setSyncReady] = useState(false);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendMessages, setFriendMessages] = useState<FriendMessage[]>([]);
 
@@ -209,6 +224,60 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!hydrated || !isSignedIn) {
+      setSyncReady(false);
+      return;
+    }
+
+    let active = true;
+    void getSyncState()
+      .then((remote) => {
+        if (!active) return;
+        if (remote.enabled) {
+          const state = remote.state as SyncSnapshot;
+          if (state.settings && typeof state.settings === 'object') {
+            setSettings((current) => ({ ...current, ...(state.settings as Partial<AppSettings>), cloudSync: true }));
+          }
+          if (Array.isArray(state.messages) && state.messages.length) setMessages(state.messages as Message[]);
+          if (Array.isArray(state.gallery)) setGallery(state.gallery as GalleryAsset[]);
+          if (typeof state.roleplayMode === 'string') setRoleplayMode(state.roleplayMode as RoleplayMode);
+          if (Array.isArray(state.friends)) setFriends(state.friends as Friend[]);
+          if (Array.isArray(state.friendMessages)) setFriendMessages(state.friendMessages as FriendMessage[]);
+        }
+        setSyncError(null);
+        setSyncReady(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setSyncError('Cloud sync is unavailable right now. Your local copy is still safe.');
+        setSyncReady(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [hydrated, isSignedIn]);
+
+  const syncSnapshot = (): SyncSnapshot => ({
+    settings,
+    messages,
+    gallery,
+    roleplayMode,
+    friends,
+    friendMessages,
+  });
+
+  useEffect(() => {
+    if (!syncReady || !isSignedIn || !settings.cloudSync) return;
+    const timer = setTimeout(() => {
+      void updateSyncState({ enabled: true, state: syncSnapshot() })
+        .then(() => setSyncError(null))
+        .catch(() => setSyncError('Could not save the latest cloud copy. Your local copy is still safe.'));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [friendMessages, friends, gallery, isSignedIn, messages, roleplayMode, settings, syncReady]);
+
+  useEffect(() => {
     if (!hydrated) return;
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ settings, messages, gallery, roleplayMode, friends, friendMessages })).catch(() => undefined);
   }, [friendMessages, friends, gallery, hydrated, messages, roleplayMode, settings]);
@@ -224,9 +293,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       chatError,
       isGenerating,
       generationError,
+      syncError,
       friends,
       friendMessages,
       updateSetting: (key, value) => setSettings((current) => ({ ...current, [key]: value })),
+      setCloudSync: async (enabled) => {
+        if (!isSignedIn) {
+          setSyncError('Sign in before turning on cloud sync.');
+          return;
+        }
+        setSyncError(null);
+        setSettings((current) => ({ ...current, cloudSync: enabled }));
+        try {
+          await updateSyncState(
+            enabled
+              ? { enabled: true, state: syncSnapshot() }
+              : { enabled: false, clearCloudCopy: true },
+          );
+        } catch {
+          setSyncError(enabled ? 'Cloud sync could not be enabled. Your local copy is still safe.' : 'Cloud sync could not be turned off. Try again.');
+          if (enabled) setSettings((current) => ({ ...current, cloudSync: false }));
+        }
+      },
       toggleMode: () => setSettings((current) => ({ ...current, mode: current.mode === 'offline' ? 'online' : 'offline' })),
       setRoleplayMode,
       sendMessage: async (text) => {
@@ -335,7 +423,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setFriends((current) => current.map((friend) => friend.id === friendId ? { ...friend, locationSharing: sharing, lastLocation: sharing ? location : undefined } : friend));
       },
     }),
-    [chatError, friendMessages, friends, gallery, generationError, hydrated, isChatting, isGenerating, messages, roleplayMode, settings],
+    [chatError, friendMessages, friends, gallery, generationError, hydrated, isChatting, isGenerating, isSignedIn, messages, roleplayMode, settings, syncError],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

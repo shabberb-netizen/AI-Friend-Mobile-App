@@ -12,6 +12,10 @@ tags:
     description: Health operations
   - name: ai
     description: AI Friend chat and creative generation
+  - name: sync
+    description: Private account sync controls
+  - name: connections
+    description: Explicit social connection consent
 paths:
   /healthz:
     get:
@@ -48,7 +52,106 @@ paths:
           description: Invalid request
         "503":
           description: AI provider unavailable
+  /sync/state:
+    get:
+      operationId: getSyncState
+      tags: [sync]
+      summary: Read the signed-in user's sync preference and private snapshot
+      responses:
+        "200":
+          description: Sync state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncState"
+        "401":
+          description: Sign in required
+    put:
+      operationId: updateSyncState
+      tags: [sync]
+      summary: Enable or disable cloud sync for the signed-in user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncStateUpdate"
+      responses:
+        "200":
+          description: Updated sync state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncState"
+        "400":
+          description: Invalid sync state
+        "401":
+          description: Sign in required
+  /connections:
+    get:
+      operationId: listSocialConnections
+      tags: [connections]
+      summary: List supported social connections and their granted consent
+      responses:
+        "200":
+          description: Supported connections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SocialConnection"
+        "401":
+          description: Sign in required
+  /connections/{provider}/consent:
+    post:
+      operationId: updateSocialConnection
+      tags: [connections]
+      summary: Grant or revoke one social connection's supported API scopes
+      parameters:
+        - $ref: "#/components/parameters/SocialProvider"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SocialConnectionConsent"
+      responses:
+        "200":
+          description: Updated connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialConnection"
+        "400":
+          description: Invalid consent
+        "401":
+          description: Sign in required
+        "404":
+          description: Unsupported connection
+  /connections/{provider}:
+    delete:
+      operationId: revokeSocialConnection
+      tags: [connections]
+      summary: Revoke one social connection
+      parameters:
+        - $ref: "#/components/parameters/SocialProvider"
+      responses:
+        "204":
+          description: Connection revoked
+        "401":
+          description: Sign in required
+        "404":
+          description: Unsupported connection
 components:
+  parameters:
+    SocialProvider:
+      name: provider
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [facebook, messenger, telegram, instagram]
   schemas:
     HealthStatus:
       type: object
@@ -103,4 +206,70 @@ components:
         - prompt
         - status
         - provider
+    SyncSnapshot:
+      type: object
+      description: User-owned content saved only when cloud sync is enabled
+      additionalProperties: true
+    SyncState:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        updatedAt:
+          type: ["string", "null"]
+        state:
+          $ref: "#/components/schemas/SyncSnapshot"
+      required: [enabled, updatedAt, state]
+    SyncStateUpdate:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        state:
+          $ref: "#/components/schemas/SyncSnapshot"
+        clearCloudCopy:
+          type: boolean
+          default: false
+      required: [enabled]
+    SocialConnection:
+      type: object
+      properties:
+        provider:
+          type: string
+          enum: [facebook, messenger, telegram, instagram]
+        displayName:
+          type: string
+        description:
+          type: string
+        readCapabilities:
+          type: array
+          items:
+            type: string
+        sendCapabilities:
+          type: array
+          items:
+            type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        connected:
+          type: boolean
+        authorizedAt:
+          type: ["string", "null"]
+      required:
+        - provider
+        - displayName
+        - description
+        - readCapabilities
+        - sendCapabilities
+        - scopes
+        - connected
+        - authorizedAt
+    SocialConnectionConsent:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+      required: [enabled]
 

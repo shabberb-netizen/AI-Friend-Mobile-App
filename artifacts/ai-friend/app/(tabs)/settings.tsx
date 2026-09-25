@@ -6,17 +6,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppSettings, useApp } from '@/context/AppContext';
 import { ScreenMode, useThemeMode } from '@/context/ThemeContext';
 import { useColors } from '@/hooks/useColors';
+import { useSecurity } from '@/context/SecurityContext';
 import * as Location from 'expo-location';
 import { requestRecordingPermissionsAsync } from 'expo-audio';
 import React, { useEffect, useState } from 'react';
 import { Alert, AppState, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import type { PermissionResponse } from 'expo';
-import { useSecurity } from '@/context/SecurityContext';
+import {
+  listSocialConnections,
+  revokeSocialConnection,
+  updateSocialConnection,
+  type SocialConnection,
+} from '@workspace/api-client-react';
 
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { settings, toggleMode, updateSetting } = useApp();
+  const { settings, toggleMode, updateSetting, setCloudSync, syncError } = useApp();
   const { screenMode, setScreenMode } = useThemeMode();
   const { isSignedIn, signOut } = useAuth();
   const { user } = useUser();
@@ -26,7 +32,30 @@ export default function SettingsScreen() {
   const [refreshedLocationPermission, setRefreshedLocationPermission] = useState<PermissionResponse | null>(null);
   const [lastCheckIn, setLastCheckIn] = useState<string | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [connections, setConnections] = useState<SocialConnection[]>([]);
+  const [connectionsError, setConnectionsError] = useState<string | null>(null);
   const effectiveLocationPermission = refreshedLocationPermission ?? locationPermission;
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      setConnections([]);
+      return;
+    }
+    let active = true;
+    void listSocialConnections()
+      .then((result) => {
+        if (active) {
+          setConnections(result);
+          setConnectionsError(null);
+        }
+      })
+      .catch(() => {
+        if (active) setConnectionsError('Connection choices are unavailable right now.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [isSignedIn]);
 
   useEffect(() => {
     if (Platform.OS === 'web') return undefined;
@@ -189,12 +218,72 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleAccountButton = () => {
+  const handleCloudSyncToggle = (enabled: boolean) => {
     if (!isSignedIn) {
-      router.push('/(auth)/sign-in');
+      Alert.alert('Sign in to sync', 'Your chats and creations stay on this phone until you sign in and explicitly turn on cloud sync.');
       return;
     }
-    Alert.alert('Account session', 'You are signed in securely. Signing out keeps your local offline data on this device.', [
+    if (!enabled) {
+      Alert.alert(
+        'Turn off cloud sync?',
+        'This stops future uploads and removes the cloud copy. Your local chats and creations stay on this phone.',
+        [
+          { text: 'Keep it on', style: 'cancel' },
+          { text: 'Turn off and remove', style: 'destructive', onPress: () => void setCloudSync(false) },
+        ],
+      );
+      return;
+    }
+    Alert.alert(
+      'Cloud sync is opt-in',
+      'AI Friend will sync your chat history, settings, friends, and generated media metadata to your signed-in account. You can turn this off and remove the cloud copy at any time.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Turn on sync', onPress: () => void setCloudSync(true) },
+      ],
+    );
+  };
+
+  const handleConnectionToggle = (connection: SocialConnection) => {
+    if (connection.connected) {
+      Alert.alert(
+        `Disconnect ${connection.displayName}?`,
+        'AI Friend will stop using this connection and remove its consent record. Other connections are not affected.',
+        [
+          { text: 'Keep connected', style: 'cancel' },
+          {
+            text: 'Disconnect',
+            style: 'destructive',
+            onPress: () => {
+              void revokeSocialConnection(connection.provider)
+                .then(() => setConnections((current) => current.map((item) => item.provider === connection.provider ? { ...item, connected: false, authorizedAt: null } : item)))
+                .catch(() => setConnectionsError(`Could not disconnect ${connection.displayName}. Try again.`));
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    Alert.alert(
+      `Allow ${connection.displayName}?`,
+      `${connection.description}\n\nCan read:\n• ${connection.readCapabilities.join('\n• ')}\n\nCan send:\n• ${connection.sendCapabilities.join('\n• ')}\n\nAI Friend will not access anything outside these supported API capabilities.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Allow connection',
+          onPress: () => {
+            void updateSocialConnection(connection.provider, { enabled: true })
+              .then((updated) => setConnections((current) => current.map((item) => item.provider === updated.provider ? updated : item)))
+              .catch(() => setConnectionsError(`Could not connect ${connection.displayName}. Try again.`));
+          },
+        },
+      ],
+    );
+  };
+
+  const handleSignOut = () => {
+    Alert.alert('Sign out of AI Friend?', 'Your local copy stays on this phone. Cloud sync pauses until you sign in again.', [
       { text: 'Stay signed in', style: 'cancel' },
       { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
     ]);
@@ -223,8 +312,8 @@ export default function SettingsScreen() {
           <Text style={[styles.accountTitle, { color: colors.foreground }]}>{isSignedIn ? 'Account connected' : 'Connect your account'}</Text>
           <Text style={[styles.accountBody, { color: colors.mutedForeground }]}>{isSignedIn ? user?.primaryEmailAddress?.emailAddress ?? 'Signed in securely' : 'Sync trusted friends, messages, and safety circles across devices.'}</Text>
         </View>
-        <Pressable onPress={handleAccountButton} style={[styles.accountButton, { backgroundColor: colors.secondary }]}>
-          <Text style={[styles.accountButtonText, { color: colors.secondaryForeground }]}>{isSignedIn ? 'Manage' : 'Sign in'}</Text>
+        <Pressable onPress={() => isSignedIn ? handleSignOut() : router.push('/(auth)/sign-in')} style={[styles.accountButton, { backgroundColor: colors.secondary }]}>
+          <Text style={[styles.accountButtonText, { color: colors.secondaryForeground }]}>{isSignedIn ? 'Sign out' : 'Sign in'}</Text>
         </Pressable>
       </View>
 
@@ -277,6 +366,47 @@ export default function SettingsScreen() {
         <Feather name="gift" size={16} color={colors.secondaryForeground} />
         <Text style={[styles.pricingText, { color: colors.secondaryForeground }]}>AI Friend is currently in trial mode. No payment or subscription is required.</Text>
       </View>
+
+      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Private sync</Text>
+      <View style={[styles.settingGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SettingRow
+          icon="cloud"
+          title="Cloud sync"
+          description={isSignedIn ? 'Sync chats, settings, friends, and media metadata only when enabled' : 'Sign in first; local-only storage remains the default'}
+          value={settings.cloudSync}
+          onChange={handleCloudSyncToggle}
+          colors={colors}
+        />
+      </View>
+      {syncError && <Text style={[styles.inlineError, { color: colors.destructive }]}>{syncError}</Text>}
+      <Text style={[styles.privacyNote, { color: colors.mutedForeground }]}>Offline mode and cloud sync are separate choices. Online AI can be used without saving a cloud copy.</Text>
+
+      {isSignedIn && (
+        <>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Optional connections</Text>
+          <Text style={[styles.sectionIntro, { color: colors.mutedForeground }]}>Each service is separate. Review the exact read and send capabilities before allowing it. No broad social-app access is requested.</Text>
+          {connections.map((connection) => (
+            <View key={connection.provider} style={[styles.connectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.connectionHeader}>
+                <View style={[styles.connectionIcon, { backgroundColor: connection.connected ? colors.mint : colors.secondary }]}>
+                  <Feather name={connection.connected ? 'check' : 'link'} size={16} color={connection.connected ? colors.mintText : colors.secondaryForeground} />
+                </View>
+                <View style={styles.connectionCopy}>
+                  <Text style={[styles.connectionTitle, { color: colors.foreground }]}>{connection.displayName}</Text>
+                  <Text style={[styles.connectionStatus, { color: connection.connected ? colors.mintText : colors.mutedForeground }]}>{connection.connected ? 'Allowed for supported APIs' : 'Not connected'}</Text>
+                </View>
+                <Pressable onPress={() => handleConnectionToggle(connection)} style={[styles.connectionButton, { backgroundColor: connection.connected ? colors.secondary : colors.primary }]}>
+                  <Text style={[styles.connectionButtonText, { color: connection.connected ? colors.secondaryForeground : colors.primaryForeground }]}>{connection.connected ? 'Disconnect' : 'Review & allow'}</Text>
+                </Pressable>
+              </View>
+              <Text style={[styles.connectionDescription, { color: colors.mutedForeground }]}>{connection.description}</Text>
+              <Text style={[styles.capabilityText, { color: colors.secondaryForeground }]}><Text style={{ fontFamily: 'Inter_700Bold' }}>Reads:</Text> {connection.readCapabilities.join(' · ')}</Text>
+              <Text style={[styles.capabilityText, { color: colors.secondaryForeground }]}><Text style={{ fontFamily: 'Inter_700Bold' }}>Sends:</Text> {connection.sendCapabilities.join(' · ')}</Text>
+            </View>
+          ))}
+          {connectionsError && <Text style={[styles.inlineError, { color: colors.destructive }]}>{connectionsError}</Text>}
+        </>
+      )}
 
       <Pressable onPress={toggleMode} style={({ pressed }) => [styles.modeCard, { backgroundColor: isOffline ? colors.indigo : colors.primary, opacity: pressed ? 0.9 : 1 }]}>
         <View style={[styles.modeCardIcon, { backgroundColor: isOffline ? colors.violet : colors.coralSoft }]}>
@@ -444,6 +574,19 @@ const styles = StyleSheet.create({
   settingTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', marginBottom: 3 },
   settingDescription: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_400Regular' },
   divider: { height: 1, marginLeft: 45 },
+  inlineError: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_500Medium', marginHorizontal: 22, marginTop: 8 },
+  privacyNote: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_400Regular', marginHorizontal: 22, marginTop: 8 },
+  sectionIntro: { fontSize: 11, lineHeight: 16, fontFamily: 'Inter_400Regular', marginHorizontal: 22, marginTop: -4, marginBottom: 12 },
+  connectionCard: { marginHorizontal: 22, borderWidth: 1, borderRadius: 20, padding: 13, marginBottom: 10 },
+  connectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  connectionIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  connectionCopy: { flex: 1 },
+  connectionTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', marginBottom: 3 },
+  connectionStatus: { fontSize: 10, fontFamily: 'Inter_500Medium' },
+  connectionButton: { borderRadius: 11, paddingHorizontal: 9, paddingVertical: 8 },
+  connectionButtonText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  connectionDescription: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_400Regular', marginTop: 10 },
+  capabilityText: { fontSize: 9, lineHeight: 14, fontFamily: 'Inter_400Regular', marginTop: 5 },
   featureCard: { marginHorizontal: 22, marginTop: 12, borderWidth: 1, borderRadius: 19, padding: 13, flexDirection: 'row', gap: 10 },
   featureIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   featureCopy: { flex: 1 },
@@ -470,7 +613,7 @@ const styles = StyleSheet.create({
   verificationIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   verificationCopy: { flex: 1 },
   verificationTitle: { fontSize: 12, fontFamily: 'Inter_700Bold', marginBottom: 4 },
-  verificationBody: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_500Medium' },
+  verificationBody: { fontSize: 10, fontFamily: 'Inter_500Medium' },
   verificationMeta: { fontSize: 10, lineHeight: 15, fontFamily: 'Inter_400Regular', marginTop: 7 },
   lifecycleCard: { marginHorizontal: 22, marginTop: 12, borderWidth: 1, borderRadius: 19, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 10 },
   lifecycleCopy: { flex: 1 },
