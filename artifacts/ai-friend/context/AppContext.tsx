@@ -42,6 +42,20 @@ export type FriendMessage = {
   time: string;
 };
 
+export type ChatGroup = {
+  id: string;
+  name: string;
+  friendIds: string[];
+};
+
+export type GroupMessage = {
+  id: string;
+  groupId: string;
+  text: string;
+  sender: 'me' | 'friend';
+  time: string;
+};
+
 export type GalleryAsset = GeneratedAiAsset & {
   localKey?: 'sunlit' | 'blueHour';
 };
@@ -68,6 +82,8 @@ type AppContextValue = {
   syncError: string | null;
   friends: Friend[];
   friendMessages: FriendMessage[];
+  chatGroups: ChatGroup[];
+  groupMessages: GroupMessage[];
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
   setCloudSync: (enabled: boolean) => Promise<void>;
   toggleMode: () => void;
@@ -78,6 +94,9 @@ type AppContextValue = {
   addFriend: (name: string, phone: string) => boolean;
   removeFriend: (friendId: string) => void;
   sendFriendMessage: (friendId: string, text: string) => void;
+  createChatGroup: (name: string, friendIds: string[]) => boolean;
+  deleteChatGroup: (groupId: string) => void;
+  sendGroupMessage: (groupId: string, text: string) => void;
   setFriendLocationSharing: (friendId: string, sharing: boolean, location?: SafetyLocation) => void;
 };
 
@@ -206,18 +225,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [syncReady, setSyncReady] = useState(false);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendMessages, setFriendMessages] = useState<FriendMessage[]>([]);
+  const [chatGroups, setChatGroups] = useState<ChatGroup[]>([]);
+  const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (!stored) return;
-        const parsed = JSON.parse(stored) as Partial<{ settings: AppSettings; messages: Message[]; gallery: GalleryAsset[]; roleplayMode: RoleplayMode; friends: Friend[]; friendMessages: FriendMessage[] }>;
+        const parsed = JSON.parse(stored) as Partial<{ settings: AppSettings; messages: Message[]; gallery: GalleryAsset[]; roleplayMode: RoleplayMode; friends: Friend[]; friendMessages: FriendMessage[]; chatGroups: ChatGroup[]; groupMessages: GroupMessage[] }>;
         if (parsed.settings) setSettings({ ...initialSettings, ...parsed.settings });
         if (parsed.messages?.length) setMessages(parsed.messages);
         if (parsed.gallery?.length) setGallery(parsed.gallery);
         if (parsed.roleplayMode) setRoleplayMode(parsed.roleplayMode);
         if (parsed.friends?.length) setFriends(parsed.friends);
         if (parsed.friendMessages?.length) setFriendMessages(parsed.friendMessages);
+        if (parsed.chatGroups?.length) setChatGroups(parsed.chatGroups);
+        if (parsed.groupMessages?.length) setGroupMessages(parsed.groupMessages);
       })
       .catch(() => undefined)
       .finally(() => setHydrated(true));
@@ -243,6 +266,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (typeof state.roleplayMode === 'string') setRoleplayMode(state.roleplayMode as RoleplayMode);
           if (Array.isArray(state.friends)) setFriends(state.friends as Friend[]);
           if (Array.isArray(state.friendMessages)) setFriendMessages(state.friendMessages as FriendMessage[]);
+          if (Array.isArray(state.chatGroups)) setChatGroups(state.chatGroups as ChatGroup[]);
+          if (Array.isArray(state.groupMessages)) setGroupMessages(state.groupMessages as GroupMessage[]);
         }
         setSyncError(null);
         setSyncReady(true);
@@ -265,6 +290,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     roleplayMode,
     friends,
     friendMessages,
+    chatGroups,
+    groupMessages,
   });
 
   useEffect(() => {
@@ -275,12 +302,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .catch(() => setSyncError('Could not save the latest cloud copy. Your local copy is still safe.'));
     }, 400);
     return () => clearTimeout(timer);
-  }, [friendMessages, friends, gallery, isSignedIn, messages, roleplayMode, settings, syncReady]);
+  }, [chatGroups, friendMessages, friends, gallery, groupMessages, isSignedIn, messages, roleplayMode, settings, syncReady]);
 
   useEffect(() => {
     if (!hydrated) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ settings, messages, gallery, roleplayMode, friends, friendMessages })).catch(() => undefined);
-  }, [friendMessages, friends, gallery, hydrated, messages, roleplayMode, settings]);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ settings, messages, gallery, roleplayMode, friends, friendMessages, chatGroups, groupMessages })).catch(() => undefined);
+  }, [chatGroups, friendMessages, friends, gallery, groupMessages, hydrated, messages, roleplayMode, settings]);
 
   const value = useMemo<AppContextValue>(
     () => ({
@@ -296,6 +323,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       syncError,
       friends,
       friendMessages,
+      chatGroups,
+      groupMessages,
       updateSetting: (key, value) => setSettings((current) => ({ ...current, [key]: value })),
       setCloudSync: async (enabled) => {
         if (!isSignedIn) {
@@ -419,11 +448,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!cleanText) return;
         setFriendMessages((current) => [...current, { id: makeId('friend-message'), friendId, text: cleanText, sender: 'me', time: nowLabel() }]);
       },
+      createChatGroup: (name, friendIds) => {
+        const cleanName = name.trim();
+        const uniqueFriendIds = [...new Set(friendIds)];
+        if (!cleanName || uniqueFriendIds.length < 1) return false;
+        setChatGroups((current) => [...current, { id: makeId('group'), name: cleanName, friendIds: uniqueFriendIds }]);
+        return true;
+      },
+      deleteChatGroup: (groupId) => {
+        setChatGroups((current) => current.filter((group) => group.id !== groupId));
+        setGroupMessages((current) => current.filter((message) => message.groupId !== groupId));
+      },
+      sendGroupMessage: (groupId, text) => {
+        const cleanText = text.trim();
+        if (!cleanText) return;
+        setGroupMessages((current) => [...current, { id: makeId('group-message'), groupId, text: cleanText, sender: 'me', time: nowLabel() }]);
+      },
       setFriendLocationSharing: (friendId, sharing, location) => {
         setFriends((current) => current.map((friend) => friend.id === friendId ? { ...friend, locationSharing: sharing, lastLocation: sharing ? location : undefined } : friend));
       },
     }),
-    [chatError, friendMessages, friends, gallery, generationError, hydrated, isChatting, isGenerating, isSignedIn, messages, roleplayMode, settings, syncError],
+    [chatError, chatGroups, friendMessages, friends, gallery, generationError, groupMessages, hydrated, isChatting, isGenerating, isSignedIn, messages, roleplayMode, settings, syncError],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

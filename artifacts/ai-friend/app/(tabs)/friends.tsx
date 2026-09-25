@@ -4,16 +4,19 @@ import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Friend, useApp } from '@/context/AppContext';
+import { ChatGroup, Friend, useApp } from '@/context/AppContext';
 import { useColors } from '@/hooks/useColors';
 
 export default function FriendsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { friends, addFriend, removeFriend, setFriendLocationSharing } = useApp();
+  const { friends, addFriend, removeFriend, setFriendLocationSharing, chatGroups, createChatGroup, deleteChatGroup } = useApp();
   const [showAdd, setShowAdd] = useState<boolean>(friends.length === 0);
+  const [showGroup, setShowGroup] = useState(false);
   const [name, setName] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
+  const [groupName, setGroupName] = useState<string>('');
+  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
   const [permission, requestPermission] = Location.useForegroundPermissions();
 
   const submitFriend = () => {
@@ -24,6 +27,27 @@ export default function FriendsScreen() {
     setName('');
     setPhone('');
     setShowAdd(false);
+  };
+
+  const toggleGroupFriend = (friendId: string) => {
+    setSelectedFriendIds((current) => current.includes(friendId) ? current.filter((id) => id !== friendId) : [...current, friendId]);
+  };
+
+  const submitGroup = () => {
+    if (!createChatGroup(groupName, selectedFriendIds)) {
+      Alert.alert('Create a group', 'Add a group name and choose at least one friend.');
+      return;
+    }
+    setGroupName('');
+    setSelectedFriendIds([]);
+    setShowGroup(false);
+  };
+
+  const confirmDeleteGroup = (group: ChatGroup) => {
+    Alert.alert('Delete this group?', 'The group and its saved messages will be removed from this phone.', [
+      { text: 'Keep group', style: 'cancel' },
+      { text: 'Delete group', style: 'destructive', onPress: () => deleteChatGroup(group.id) },
+    ]);
   };
 
   const shareLocation = async (friend: Friend) => {
@@ -110,11 +134,67 @@ export default function FriendsScreen() {
         ))}
       </View>
 
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Group chats</Text>
+        <Pressable onPress={() => setShowGroup((current) => !current)} disabled={friends.length === 0} style={({ pressed }) => [styles.addButton, { backgroundColor: friends.length === 0 ? colors.muted : colors.violet, opacity: pressed ? 0.78 : 1 }]}>
+          <Feather name={showGroup ? 'x' : 'users'} size={15} color={friends.length === 0 ? colors.mutedForeground : colors.primaryForeground} />
+          <Text style={[styles.addButtonText, { color: friends.length === 0 ? colors.mutedForeground : colors.primaryForeground }]}>{showGroup ? 'Close' : 'Create group'}</Text>
+        </Pressable>
+      </View>
+      {showGroup && (
+        <View style={[styles.groupCreateCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.cardLabel, { color: colors.mutedForeground }]}>NEW GROUP CHAT</Text>
+          <TextInput value={groupName} onChangeText={setGroupName} placeholder="Group name" placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border }]} />
+          <Text style={[styles.memberLabel, { color: colors.mutedForeground }]}>CHOOSE FRIENDS</Text>
+          {friends.map((friend) => {
+            const selected = selectedFriendIds.includes(friend.id);
+            return (
+              <Pressable key={friend.id} onPress={() => toggleGroupFriend(friend.id)} style={[styles.memberRow, { backgroundColor: selected ? colors.accent : colors.secondary, borderColor: selected ? colors.violet : colors.border }]}>
+                <View style={[styles.memberAvatar, { backgroundColor: selected ? colors.primary : colors.card }]}><Text style={[styles.memberInitial, { color: selected ? colors.primaryForeground : colors.foreground }]}>{friend.name.slice(0, 1).toUpperCase()}</Text></View>
+                <Text style={[styles.memberName, { color: colors.foreground }]}>{friend.name}</Text>
+                <Feather name={selected ? 'check-circle' : 'circle'} size={18} color={selected ? colors.primary : colors.mutedForeground} />
+              </Pressable>
+            );
+          })}
+          <Pressable onPress={submitGroup} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.secondary, opacity: pressed ? 0.78 : 1 }]}>
+            <Feather name="message-circle" size={16} color={colors.secondaryForeground} />
+            <Text style={[styles.saveButtonText, { color: colors.secondaryForeground }]}>Create group chat</Text>
+          </Pressable>
+        </View>
+      )}
+      {friends.length === 0 && (
+        <Text style={[styles.groupHint, { color: colors.mutedForeground }]}>Add at least one friend before creating a group chat.</Text>
+      )}
+      {chatGroups.length > 0 && (
+        <View style={styles.groupList}>
+          {chatGroups.map((group) => (
+            <GroupCard key={group.id} group={group} friends={friends} colors={colors} onOpen={() => router.push({ pathname: '/group-chat', params: { groupId: group.id } })} onDelete={() => confirmDeleteGroup(group)} />
+          ))}
+        </View>
+      )}
+
       <View style={[styles.syncNote, { backgroundColor: colors.secondary }]}>
         <Feather name="lock" size={15} color={colors.secondaryForeground} />
         <Text style={[styles.syncText, { color: colors.secondaryForeground }]}>Friends and messages are saved on this device. Cross-device chat and live friend-to-friend location sync require secure accounts and explicit invitations.</Text>
       </View>
     </ScrollView>
+  );
+}
+
+function GroupCard({ group, friends, colors, onOpen, onDelete }: { group: ChatGroup; friends: Friend[]; colors: ReturnType<typeof useColors>; onOpen: () => void; onDelete: () => void }) {
+  const memberNames = group.friendIds.map((friendId) => friends.find((friend) => friend.id === friendId)?.name).filter(Boolean).join(', ');
+  return (
+    <View style={[styles.groupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Pressable onPress={onOpen} style={styles.groupMain}>
+        <View style={[styles.groupAvatar, { backgroundColor: colors.violet }]}><Feather name="users" size={17} color={colors.primaryForeground} /></View>
+        <View style={styles.groupCopy}>
+          <Text style={[styles.groupName, { color: colors.foreground }]}>{group.name}</Text>
+          <Text style={[styles.groupMembers, { color: colors.mutedForeground }]} numberOfLines={1}>{memberNames || 'No members'}</Text>
+        </View>
+        <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+      </Pressable>
+      <Pressable onPress={onDelete} accessibilityLabel={`Delete ${group.name}`} style={styles.groupDelete}><Feather name="trash-2" size={15} color={colors.mutedForeground} /></Pressable>
+    </View>
   );
 }
 
@@ -170,6 +250,21 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 14, fontFamily: 'Inter_700Bold', marginBottom: 5 },
   emptyBody: { fontSize: 11, lineHeight: 16, fontFamily: 'Inter_400Regular', textAlign: 'center', maxWidth: 240 },
   friendList: { gap: 11, paddingHorizontal: 22 },
+  groupCreateCard: { marginHorizontal: 22, borderRadius: 21, borderWidth: 1, padding: 14 },
+  memberLabel: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 1.2, marginTop: 3, marginBottom: 8 },
+  memberRow: { minHeight: 46, borderRadius: 13, borderWidth: 1, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 7 },
+  memberAvatar: { width: 28, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  memberInitial: { fontSize: 11, fontFamily: 'Inter_700Bold' },
+  memberName: { flex: 1, fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  groupHint: { marginHorizontal: 22, marginTop: 10, fontSize: 10, fontFamily: 'Inter_400Regular' },
+  groupList: { gap: 10, paddingHorizontal: 22, marginTop: 1 },
+  groupCard: { minHeight: 67, borderRadius: 19, borderWidth: 1, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  groupMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  groupAvatar: { width: 38, height: 38, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  groupCopy: { flex: 1 },
+  groupName: { fontSize: 13, fontFamily: 'Inter_700Bold', marginBottom: 3 },
+  groupMembers: { fontSize: 10, fontFamily: 'Inter_400Regular' },
+  groupDelete: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   friendCard: { borderRadius: 21, borderWidth: 1, padding: 13, flexDirection: 'row', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 },
   friendAvatar: { width: 42, height: 42, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   friendInitial: { fontSize: 16, fontFamily: 'Inter_700Bold' },

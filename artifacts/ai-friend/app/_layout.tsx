@@ -21,7 +21,7 @@ import { setAuthTokenGetter, setBaseUrl } from '@workspace/api-client-react';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
-import { Redirect, Stack, useSegments } from 'expo-router';
+import { Redirect, Stack, useRootNavigationState, useSegments } from 'expo-router';
 
 const queryClient = new QueryClient();
 
@@ -32,9 +32,10 @@ const clerkProxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
 function RootLayoutNav() {
   const { isLoaded, isSignedIn } = useAuth();
   const segments = useSegments();
+  const navigationState = useRootNavigationState();
   const inAuthGroup = segments[0] === '(auth)';
 
-  if (!isLoaded) return null;
+  if (!isLoaded || !navigationState?.key) return null;
   if (!isSignedIn && !inAuthGroup) return <Redirect href="/(auth)/sign-in" />;
   if (isSignedIn && inAuthGroup) return <Redirect href="/(tabs)" />;
 
@@ -42,6 +43,7 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerBackTitle: 'Back' }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="friend-chat" options={{ headerShown: false }} />
+      <Stack.Screen name="group-chat" options={{ headerShown: false }} />
     </Stack>
   );
 }
