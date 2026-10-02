@@ -15,6 +15,7 @@ import {
 } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppProvider } from '@/context/AppContext';
+import { IntroGateProvider, useIntroGate } from '@/context/IntroGateContext';
 import { SecurityGate, SecurityProvider } from '@/context/SecurityContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { setAuthTokenGetter, setBaseUrl } from '@workspace/api-client-react';
@@ -24,7 +25,6 @@ SplashScreen.preventAutoHideAsync();
 import { Redirect, Stack, useRootNavigationState, useSegments } from 'expo-router';
 
 const queryClient = new QueryClient();
-
 setBaseUrl(process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : null);
 const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '';
 const clerkProxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
@@ -33,14 +33,19 @@ function RootLayoutNav() {
   const { isLoaded, isSignedIn } = useAuth();
   const segments = useSegments();
   const navigationState = useRootNavigationState();
+  const { introComplete } = useIntroGate();
   const inAuthGroup = segments[0] === '(auth)';
+  const isWelcomeScreen = inAuthGroup && segments[1] === 'welcome';
 
-  if (!isLoaded || !navigationState?.key) return null;
+  if (!isLoaded || !navigationState?.key || introComplete === null) return null;
+  if (!isSignedIn && !introComplete && !isWelcomeScreen) return <Redirect href="/(auth)/welcome" />;
+  if (!isSignedIn && introComplete && isWelcomeScreen) return <Redirect href="/(auth)/sign-in" />;
   if (!isSignedIn && !inAuthGroup) return <Redirect href="/(auth)/sign-in" />;
   if (isSignedIn && inAuthGroup) return <Redirect href="/(tabs)" />;
 
   return (
     <Stack screenOptions={{ headerBackTitle: 'Back' }}>
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="friend-chat" options={{ headerShown: false }} />
       <Stack.Screen name="group-chat" options={{ headerShown: false }} />
@@ -86,7 +91,9 @@ export default function RootLayout() {
                     <QueryClientProvider client={queryClient}>
                       <GestureHandlerRootView style={{ flex: 1 }}>
                         <KeyboardProvider>
-                          <RootLayoutNav />
+                          <IntroGateProvider>
+                            <RootLayoutNav />
+                          </IntroGateProvider>
                         </KeyboardProvider>
                       </GestureHandlerRootView>
                     </QueryClientProvider>
