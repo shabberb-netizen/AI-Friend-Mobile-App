@@ -13,11 +13,20 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const busy = fetchStatus === 'fetching';
+  const requiresEmailVerification = signUp.status === 'missing_requirements' && Boolean(signUp.emailAddress);
 
   const submit = async () => {
     const result = await signUp.password({ emailAddress: email.trim(), password });
     if (result.error) return;
     await signUp.verifications.sendEmailCode();
+  };
+
+  const chooseDifferentEmail = async () => {
+    const result = await signUp.reset();
+    if (result.error) return;
+    setEmail('');
+    setPassword('');
+    setCode('');
   };
 
   const verify = async () => {
@@ -29,15 +38,21 @@ export default function SignUpScreen() {
     <ScrollView style={[styles.screen, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingTop: insets.top + 34, paddingBottom: 40 }}>
       <View style={styles.brand}><View style={[styles.brandMark, { backgroundColor: colors.primary }]}><Text style={[styles.brandHeart, { color: colors.primaryForeground }]}>♥</Text></View><Text style={[styles.brandName, { color: colors.foreground }]}>AI Friend</Text></View>
       <Text style={[styles.eyebrow, { color: colors.primary }]}>YOUR PRIVATE CIRCLE</Text>
-      <Text style={[styles.title, { color: colors.foreground }]}>{signUp.status === 'missing_requirements' ? 'Verify your email' : 'Create your account'}</Text>
+      <Text style={[styles.title, { color: colors.foreground }]}>{requiresEmailVerification ? 'Verify your email' : 'Create your account'}</Text>
       <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Use an account when you want friends, messages, and safety check-ins to sync securely.</Text>
-      {signUp.status === 'missing_requirements' ? (
+      {requiresEmailVerification ? (
         <>
+          <Text style={[styles.sentTo, { color: colors.mutedForeground }]}>
+            Enter the code sent to {signUp.emailAddress || 'your email address'}.
+          </Text>
           <Text style={[styles.label, { color: colors.foreground }]}>Email verification code</Text>
           <TextInput value={code} onChangeText={setCode} keyboardType="number-pad" placeholder="Enter your code" placeholderTextColor={colors.mutedForeground} style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]} />
           {errors.fields.code && <Text style={styles.error}>{errors.fields.code.message}</Text>}
           <AuthButton label="Verify and continue" onPress={verify} disabled={!code || busy} colors={colors} />
           <Pressable onPress={() => signUp.verifications.sendEmailCode()}><Text style={[styles.link, { color: colors.primary }]}>Send me a new code</Text></Pressable>
+          <Pressable onPress={() => void chooseDifferentEmail()} accessibilityRole="button" accessibilityLabel="Use a different email address">
+            <Text style={[styles.link, styles.changeEmailLink, { color: colors.primary }]}>Use a different email</Text>
+          </Pressable>
         </>
       ) : (
         <>
@@ -74,7 +89,9 @@ const styles = StyleSheet.create({
   button: { minHeight: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 22 },
   buttonText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   error: { color: '#FF8D9A', fontSize: 11, lineHeight: 16, marginTop: 8, fontFamily: 'Inter_500Medium' },
+  sentTo: { fontSize: 12, lineHeight: 17, marginTop: 10, fontFamily: 'Inter_400Regular' },
   switchRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 22 },
   switchText: { fontSize: 12, fontFamily: 'Inter_400Regular' },
   link: { fontSize: 12, fontFamily: 'Inter_700Bold', textAlign: 'center', marginTop: 18 },
+  changeEmailLink: { marginTop: 14 },
 });
